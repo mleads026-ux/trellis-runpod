@@ -1,4 +1,5 @@
 import { discover } from "./pod-discovery.js";
+import { queueGuard } from "./queue-guard.js";
 // Standalone Cloudflare scheduled watchdog. NOT ARMED by default.
 // Deploy as a separate Worker only after mock tests and explicit authorization.
 // Required runtime secrets: RUNPOD_API_KEY, WATCHDOG_POD_ID, WATCHDOG_DEADLINE_UTC,
@@ -42,12 +43,15 @@ export async function watchdog(env, now=Date.now(), api=gql) {
 }
 export default {
   async scheduled(_event,env,ctx) {
-    ctx.waitUntil(Promise.allSettled([watchdog(env), discover(env)]).then(([w,d])=>{
+    ctx.waitUntil(Promise.allSettled([watchdog(env), discover(env), queueGuard(env)]).then(([w,d,g])=>{
       if (w.status==="fulfilled") console.log("Watchdog:",w.value.status);
       else console.error("WATCHDOG FAILED:",String(w.reason));
       if (d.status==="fulfilled") console.log("Discovery:",d.value.status);
       else console.error("DISCOVERY FAILED:",String(d.reason));
+      if (g.status==="fulfilled") console.log("Queue guard:",g.value.status);
+      else console.error("QUEUE GUARD FAILED:",String(g.reason));
       if (w.status==="rejected") throw w.reason;
+      if (g.status==="rejected") throw g.reason;
     }));
   },
   async fetch(request,env) {
@@ -58,7 +62,7 @@ export default {
     const armed=env.WATCHDOG_ARMED==="yes";
     try {
       const d=await discover(env);
-      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":d.status==="invalid_response"?"failed":"ok",terminationArmed:armed,automaticQueueProtection:false}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":d.status==="invalid_response"?"failed":"ok",terminationArmed:armed,automaticQueueProtection:env.WATCHDOG_AUTO_ARM==="yes"}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     } catch (_error) {
       return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:"error",runpodConnection:"failed",terminationArmed:armed,automaticQueueProtection:false}),{status:503,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
