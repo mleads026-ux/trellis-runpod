@@ -26,7 +26,7 @@ test("cron handler with no secrets remains disarmed and does not call RunPod", a
     assert.equal(pending.length,1);
     await Promise.all(pending);
     assert.equal(networkCalls,0);
-    assert.ok(messages.some(x => x.includes("disarmed")));
+    assert.ok(messages.some(x => x.includes("legacy_termination_disabled")));
   } finally {
     globalThis.fetch = oldFetch;
     console.log = oldLog;
