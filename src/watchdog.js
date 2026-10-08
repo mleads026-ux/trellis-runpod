@@ -33,7 +33,8 @@ export async function watchdog(env, now=Date.now(), api=gql) {
   const before=await api(env,"query { myself { pods { id desiredStatus } } }");
   const pod=before?.myself?.pods?.find(p=>p.id===cfg.podId);
   if (!pod) return {status:"not_listed", podId:cfg.podId};
-  await api(env,"mutation ($id: String!) { podTerminate(input: { podId: $id }) }",{id:cfg.podId});
+  const termination=await api(env,"mutation ($id: String!) { podTerminate(input: { podId: $id }) }",{id:cfg.podId});
+  if (termination?.podTerminate === false || termination?.podTerminate === null) throw new Error("RunPod termination was not accepted; retry next cron");
   const after=await api(env,"query { myself { pods { id desiredStatus } } }");
   const stillListed=after?.myself?.pods?.some(p=>p.id===cfg.podId);
   if (stillListed) throw new Error("Pod still listed; retry on next cron invocation");
