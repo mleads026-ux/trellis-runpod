@@ -49,6 +49,17 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+                    description: RunPod result data
+                  error:
+                    type: string
+                  id:
+                    type: string
+                  status:
+                    type: string
                 additionalProperties: true
     post:
       operationId: operateRunpod
@@ -66,4 +77,15 @@ paths:
             application/json:
               schema:
                 type: object
+                properties:
+                  data:
+                    type: object
+                    additionalProperties: true
+                    description: RunPod result data
+                  error:
+                    type: string
+                  id:
+                    type: string
+                  status:
+                    type: string
                 additionalProperties: true
