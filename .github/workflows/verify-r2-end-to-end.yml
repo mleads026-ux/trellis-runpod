@@ -1,0 +1,44 @@
+name: Verify R2 GLB end-to-end
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Worker storage connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --retry 3 --max-time 20 \
+            'https://trellis-runpod-api.mleads026.workers.dev/api/storage-health' \
+            -o health.json
+          node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync("health.json","utf8"));if(h.status!=="connected"||h.bucket!=="trellis-3d-outputs")process.exit(1);console.log("R2 Worker binding connected")'
+      - name: Verify private GLB round trip
+        env:
+          STORAGE_TEST_API_KEY: ${{ secrets.STORAGE_TEST_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${STORAGE_TEST_API_KEY}" ]]; then
+            echo "::error::Set STORAGE_TEST_API_KEY to the same value as the Cloudflare Worker's ACTION_API_KEY before running this workflow."
+            exit 1
+          fi
+          echo "::add-mask::${STORAGE_TEST_API_KEY}"
+          filename="integration-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.glb"
+          base="https://trellis-runpod-api.mleads026.workers.dev/api/models/${filename}"
+          # Small valid GLB 2.0 header and empty JSON chunk.
+          printf 'glTF\\002\\000\\000\\000\\024\\000\\000\\000\\004\\000\\000\\000JSON{}  ' > model.glb
+          curl --fail-with-body --silent --show-error --retry 2 --max-time 30 \
+            -X PUT -H "Authorization: Bearer ${STORAGE_TEST_API_KEY}" \
+            -H 'Content-Type: model/gltf-binary' --data-binary @model.glb \
+            "${base}" -o upload.json
+          curl --fail-with-body --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${STORAGE_TEST_API_KEY}" "${base}" -o downloaded.glb
+          cmp model.glb downloaded.glb
+          echo "PASS: uploaded and downloaded GLB bytes match"
