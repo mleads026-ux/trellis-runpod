@@ -29,6 +29,7 @@ def main():
         parser.error("Unsupported --texture-size")
     if not os.environ.get("TRELLIS_STORAGE_API_KEY"):
         parser.error("TRELLIS_STORAGE_API_KEY missing: refuse to generate without backup destination")
+    os.environ.setdefault("SPCONV_ALGO", "native")
     try:
         import torch
         from PIL import Image
@@ -38,7 +39,6 @@ def main():
         parser.error(f"Original Microsoft TRELLIS dependencies not installed: {exc}")
     if not torch.cuda.is_available():
         parser.error("CUDA unavailable; do not attempt generation on CPU")
-    os.environ.setdefault("SPCONV_ALGO", "native")
     print("Loading Microsoft TRELLIS-image-large...", flush=True)
     pipeline = TrellisImageTo3DPipeline.from_pretrained("microsoft/TRELLIS-image-large")
     pipeline.cuda()
