@@ -1,0 +1,33 @@
+name: Deploy disarmed RunPod watchdog
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-disarmed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: runpod-watchdog-disarmed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run offline mock safety tests
+        run: node --experimental-default-type=module --test tests/watchdog.test.mjs
+      - name: Verify disarmed configuration
+        shell: bash
+        run: |
+          if grep -q 'WATCHDOG_ARMED *= *"yes"' wrangler.watchdog.toml; then
+            echo "Refusing to deploy armed watchdog"
+            exit 1
+          fi
+      - name: Deploy standalone Cloudflare Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.watchdog.toml
