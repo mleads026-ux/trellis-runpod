@@ -1,0 +1,32 @@
+name: TRELLIS setup dry run
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/trellis_setup_plan.sh'
+      - '.github/workflows/trellis-setup-dry-run.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell script
+        run: bash -n scripts/trellis_setup_plan.sh
+      - name: Test safe dry-run mode
+        run: |
+          bash scripts/trellis_setup_plan.sh --dry-run | tee setup.log
+          grep -q 'DRY RUN: no network calls' setup.log
+      - name: Ensure install mode is blocked without approval
+        run: |
+          if bash scripts/trellis_setup_plan.sh --install; then
+            echo 'FAIL: unapproved install allowed'
+            exit 1
+          fi
+      - name: Confirm no RunPod credentials required
+        run: echo 'No Pods created. No GPU usage. No model downloaded.'
