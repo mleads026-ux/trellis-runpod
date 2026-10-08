@@ -51,6 +51,44 @@ export default async function handler(req, res) {
       const data = await graphql("query { myself { pods { id name desiredStatus costPerHr gpuCount } } }");
       return reply(res, 200, data);
     }
+    if (req.method === "POST" && action === "create_pod") {
+      const gpuTypeId = req.body?.gpu_type_id;
+      const cloudType = req.body?.cloud_type === "SECURE" ? "SECURE" : "COMMUNITY";
+      const maxCostPerHr = Number(req.body?.max_cost_per_hr ?? 0.8);
+      if (typeof gpuTypeId !== "string" || !gpuTypeId) return reply(res, 400, { error: "gpu_type_id is required" });
+      if (!Number.isFinite(maxCostPerHr) || maxCostPerHr <= 0 || maxCostPerHr > 1) return reply(res, 400, { error: "max_cost_per_hr must be > 0 and <= 1" });
+      const query = `mutation ($input: PodFindAndDeployOnDemandInput!) {
+        podFindAndDeployOnDemand(input: $input) { id name desiredStatus costPerHr gpuCount machine { podHostId } }
+      }`;
+      const input = {
+        name: "trellis-asset-factory",
+        cloudType,
+        gpuTypeId,
+        gpuCount: 1,
+        volumeInGb: 40,
+        containerDiskInGb: 50,
+        minVcpuCount: 4,
+        minMemoryInGb: 16,
+        imageName: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+        dockerArgs: "",
+        ports: "22/tcp",
+        volumeMountPath: "/workspace",
+        env: []
+      };
+      const data = await graphql(query, { input });
+      const pod = data?.podFindAndDeployOnDemand;
+      if (pod?.costPerHr > maxCostPerHr) {
+        try { await graphql("mutation ($id: String!) { podTerminate(input: { podId: $id }) }", { id: pod.id }); } catch {}
+        return reply(res, 409, { error: "Created offer exceeded max_cost_per_hr and was terminated", quotedCostPerHr: pod.costPerHr });
+      }
+      return reply(res, 200, data);
+    }
+    if (req.method === "POST" && action === "terminate_pod") {
+      const id = req.body?.pod_id;
+      if (typeof id !== "string" || !id) return reply(res, 400, { error: "pod_id is required" });
+      const data = await graphql("mutation ($id: String!) { podTerminate(input: { podId: $id }) }", { id });
+      return reply(res, 200, data);
+    }
     if (req.method === "POST" && (action === "start_pod" || action === "stop_pod")) {
       if (!podId) return reply(res, 400, { error: "RUNPOD_POD_ID is not configured" });
       const mutation = action === "start_pod"
