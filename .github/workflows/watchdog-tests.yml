@@ -5,7 +5,7 @@ on:
   push:
     paths:
       - 'src/watchdog.js'
-      - 'tests/watchdog.test.mjs'
+      - 'tests/**'
       - '.github/workflows/watchdog-tests.yml'
 
 permissions:
@@ -22,5 +22,5 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Run mock watchdog tests (no RunPod access)
-        run: node --experimental-default-type=module --test tests/watchdog.test.mjs
+      - name: Run all mock watchdog tests (no RunPod access)
+        run: node --experimental-default-type=module --test tests/*.test.mjs
