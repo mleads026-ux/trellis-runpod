@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: Control a configured RunPod pod and submit jobs to a configured Serverless endpoint.
 servers:
-  - url: https://YOUR-VERCEL-DOMAIN.vercel.app
+  - url: https://trellis-runpod.vercel.app
 components:
   securitySchemes:
     ActionToken:
