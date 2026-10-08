@@ -11,7 +11,8 @@ test("missing secret fails closed", async()=>{
  assert.equal((await discover({WATCHDOG_DISCOVERY_ENABLED:"yes",WATCHDOG_EXPECTED_POD_NAME:"trellis-a5000"})).status,"missing_runpod_secret");
 });
 test("invalid name and missing Pod fail closed",()=>{
- assert.equal(selectCandidate([],""),"invalid_name");
+ assert.equal(selectCandidate([],"").status,"invalid_name");
+ assert.equal(selectCandidate([],"trellis-a5000").status,"not_found");
 });
 test("unique exact match is unverified candidate, not authorization",()=>{
  const result=selectCandidate([{id:"a1",name:"trellis-a5000",desiredStatus:"RUNNING"},{id:"b2",name:"other"}],"trellis-a5000");
