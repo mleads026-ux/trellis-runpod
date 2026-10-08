@@ -25,7 +25,7 @@ export default {
       if (!env.ACTION_API_KEY || request.headers.get("Authorization") !== `Bearer ${env.ACTION_API_KEY}`) return respond(401, { error: "Unauthorized" });
       if (!env.TRELLIS_OUTPUTS) return respond(503, { error: "R2 not configured" });
       const name = url.pathname.slice("/api/models/".length);
-      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\\.glb$/.test(name) || name.includes("..")) return respond(400, { error: "Invalid GLB filename" });
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}[.]glb$/.test(name) || name.includes("..")) return respond(400, { error: "Invalid GLB filename" });
       const key = `models/${name}`;
       if (request.method === "PUT") {
         const length = Number(request.headers.get("Content-Length"));
