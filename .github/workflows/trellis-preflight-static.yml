@@ -1,0 +1,29 @@
+name: TRELLIS A5000 static checks
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/trellis_a5000_preflight.sh'
+      - '.github/workflows/trellis-preflight-static.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  static-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check script syntax
+        run: bash -n scripts/trellis_a5000_preflight.sh
+      - name: Verify no Pod creation or model download commands
+        shell: bash
+        run: |
+          if grep -En '(^|[[:space:]])(runpodctl|wrangler|pip install|conda install|git clone|wget|curl)([[:space:]]|$)' scripts/trellis_a5000_preflight.sh; then
+            echo 'Unexpected provisioning, installation, or download command found'
+            exit 1
+          fi
+      - name: Explain scope
+        run: echo 'Static checks passed. This workflow does not run CUDA, RunPod, or TRELLIS inference.'
