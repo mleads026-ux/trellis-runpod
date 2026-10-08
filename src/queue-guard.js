@@ -16,7 +16,7 @@ export async function queueGuard(env,now=Date.now(),api=async(query,variables={}
  const key="protected-pod-v1";let saved=await env.WATCHDOG_STATE.get(key,"json");
  if(!saved){
   if(pods.length===0)return {status:"waiting_for_pod"};
-  if(pods.length!==1||pods[0]?.name!=="outdoor_silver_sparrow"||!ID.test(pods[0]?.id||""))return {status:"identity_ambiguous"};
+  if(pods.length!==1||pods[0]?.desiredStatus==="EXITED"||pods[0]?.name!=="outdoor_silver_sparrow"||!ID.test(pods[0]?.id||""))return {status:"identity_ambiguous"};
   saved={podId:pods[0].id,firstObserved:now,deadline:now+5*60*1000};
   await env.WATCHDOG_STATE.put(key,JSON.stringify(saved));
   const persisted=await env.WATCHDOG_STATE.get(key,"json");
@@ -27,9 +27,10 @@ export async function queueGuard(env,now=Date.now(),api=async(query,variables={}
  const target=pods.find(p=>p.id===saved.podId);
  if(!target)return {status:"pod_absent"};
  if(target.name!=="outdoor_silver_sparrow")throw Error("Protected Pod identity changed");
+ if(target.desiredStatus==="EXITED")return {status:"already_stopped"};
  if(now<saved.deadline)return {status:"protected_waiting"};
  const mutation=await api("mutation ($id: String!) { podStop(input: { podId: $id }) }",{id:saved.podId});
- if(mutation?.podStop===false||mutation?.podTerminate===null)throw Error("RunPod rejected stop");
+ if(mutation?.podStop!==true)throw Error("RunPod rejected stop");
  const after=await api(q);
  const stopped=after?.myself?.pods?.find(p=>p.id===saved.podId);
  if(!Array.isArray(after?.myself?.pods)||!stopped||stopped.desiredStatus!=="EXITED")throw Error("Stop unverified; retry");
