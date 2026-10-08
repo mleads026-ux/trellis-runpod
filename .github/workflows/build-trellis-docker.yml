@@ -1,0 +1,36 @@
+name: Build TRELLIS Docker image
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .github/workflows/build-trellis-docker.yml
+      - scripts/generate_trellis_and_backup.py
+      - scripts/save_trellis_output.py
+permissions:
+  contents: read
+  packages: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/hostedtoolcache /usr/share/dotnet /usr/local/share/powershell
+          docker system prune -af
+          df -h
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:trellis
+          platforms: linux/amd64
