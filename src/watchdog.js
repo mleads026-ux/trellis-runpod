@@ -41,9 +41,12 @@ export async function watchdog(env, now=Date.now(), api=gql) {
 }
 export default {
   async scheduled(_event,env,ctx) {
-    ctx.waitUntil(Promise.all([watchdog(env), discover(env)]).then(([w,d])=>console.log("Watchdog:",w.status,"Discovery:",d.status)).catch(e=>{
-      console.error("WATCHDOG FAILED:",String(e));
-      throw e;
+    ctx.waitUntil(Promise.allSettled([watchdog(env), discover(env)]).then(([w,d])=>{
+      if (w.status==="fulfilled") console.log("Watchdog:",w.value.status);
+      else console.error("WATCHDOG FAILED:",String(w.reason));
+      if (d.status==="fulfilled") console.log("Discovery:",d.value.status);
+      else console.error("DISCOVERY FAILED:",String(d.reason));
+      if (w.status==="rejected") throw w.reason;
     }));
   },
   async fetch(request,env) {
@@ -54,7 +57,7 @@ export default {
     const armed=env.WATCHDOG_ARMED==="yes";
     try {
       const d=await discover(env);
-      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":"ok",terminationArmed:armed,automaticQueueProtection:false}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":d.status==="invalid_response"?"failed":"ok",terminationArmed:armed,automaticQueueProtection:false}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     } catch (_error) {
       return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:"error",runpodConnection:"failed",terminationArmed:armed,automaticQueueProtection:false}),{status:503,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
     }
