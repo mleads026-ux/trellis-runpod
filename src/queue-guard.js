@@ -28,9 +28,10 @@ export async function queueGuard(env,now=Date.now(),api=async(query,variables={}
  if(!target)return {status:"pod_absent"};
  if(target.name!=="outdoor_silver_sparrow")throw Error("Protected Pod identity changed");
  if(now<saved.deadline)return {status:"protected_waiting"};
- const mutation=await api("mutation ($id: String!) { podTerminate(input: { podId: $id }) }",{id:saved.podId});
- if(mutation?.podTerminate===false||mutation?.podTerminate===null)throw Error("RunPod rejected termination");
+ const mutation=await api("mutation ($id: String!) { podStop(input: { podId: $id }) }",{id:saved.podId});
+ if(mutation?.podStop===false||mutation?.podTerminate===null)throw Error("RunPod rejected stop");
  const after=await api(q);
- if(!Array.isArray(after?.myself?.pods)||after.myself.pods.some(p=>p.id===saved.podId))throw Error("Termination unverified; retry");
- return {status:"terminated_verified"};
+ const stopped=after?.myself?.pods?.find(p=>p.id===saved.podId);
+ if(!Array.isArray(after?.myself?.pods)||!stopped||stopped.desiredStatus!=="EXITED")throw Error("Stop unverified; retry");
+ return {status:"stopped_verified"};
 }
