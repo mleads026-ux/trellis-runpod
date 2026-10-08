@@ -2,11 +2,13 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import worker, { watchdog, validateConfig } from "../src/watchdog.js";
 
-test("HTTP status endpoint reports watchdog only, without exposing secrets", async () => {
-  const response = await worker.fetch();
+test("HTTP health endpoint is read-only, disarmed, and does not expose secrets", async () => {
+  const response = await worker.fetch(new Request("https://example.com/health"), {});
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
-  assert.deepEqual(await response.json(), {status:"watchdog",armedByDefault:false});
+  assert.deepEqual(await response.json(), {service:"trellis-runpod-watchdog",discovery:"disabled",runpodConnection:"not_tested",terminationArmed:false,automaticQueueProtection:false});
+  const other = await worker.fetch(new Request("https://example.com/"), {});
+  assert.equal(other.status, 404);
 });
 
 test("cron handler with no secrets remains disarmed and does not call RunPod", async () => {
