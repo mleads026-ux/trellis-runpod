@@ -1,0 +1,15 @@
+# Separate Cloudflare Worker for RunPod watchdog.
+# This file alone does not deploy, schedule, or arm the watchdog.
+# Deploy independently from trellis-runpod-api only after mock tests pass.
+name = "trellis-runpod-watchdog"
+main = "src/watchdog.js"
+compatibility_date = "2025-10-01"
+workers_dev = true
+
+# Every minute is best effort, NOT a real-time or billing guarantee.
+[triggers]
+crons = ["* * * * *"]
+
+# Do not put RUNPOD_API_KEY, WATCHDOG_POD_ID, WATCHDOG_DEADLINE_UTC
+# or WATCHDOG_ARMED in this file. Set runtime secrets per environment.
+# WATCHDOG_ARMED must remain unset until explicitly authorized.
