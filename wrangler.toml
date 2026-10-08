@@ -2,3 +2,8 @@ name = "trellis-runpod-api"
 main = "src/worker.js"
 compatibility_date = "2025-10-01"
 workers_dev = true
+
+# Private R2 bucket for generated GLB files. Not publicly exposed.
+[[r2_buckets]]
+binding = "TRELLIS_OUTPUTS"
+bucket_name = "trellis-3d-outputs"
