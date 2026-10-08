@@ -56,6 +56,10 @@ export default async function handler(req, res) {
       const cloudType = req.body?.cloud_type === "SECURE" ? "SECURE" : "COMMUNITY";
       const maxCostPerHr = Number(req.body?.max_cost_per_hr ?? 0.8);
       if (typeof gpuTypeId !== "string" || !gpuTypeId) return reply(res, 400, { error: "gpu_type_id is required" });
+      const types = await graphql("query { gpuTypes { id displayName memoryInGb } }");
+      const selected = types?.gpuTypes?.find(g => g.id === gpuTypeId);
+      if (!selected) return reply(res, 400, { error: "Unknown gpu_type_id" });
+      if (Number(selected.memoryInGb) < 24) return reply(res, 400, { error: "GPU rejected: TRELLIS asset factory requires at least 24GB VRAM", gpu: selected });
       if (!Number.isFinite(maxCostPerHr) || maxCostPerHr <= 0 || maxCostPerHr > 1) return reply(res, 400, { error: "max_cost_per_hr must be > 0 and <= 1" });
       const query = `mutation ($input: PodFindAndDeployOnDemandInput!) {
         podFindAndDeployOnDemand(input: $input) { id name desiredStatus costPerHr gpuCount machine { podHostId } }
