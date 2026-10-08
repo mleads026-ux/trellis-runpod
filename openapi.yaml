@@ -1,0 +1,69 @@
+openapi: 3.1.0
+info:
+  title: RunPod Control Bridge
+  version: 1.0.0
+  description: Control a configured RunPod pod and submit jobs to a configured Serverless endpoint.
+servers:
+  - url: https://YOUR-VERCEL-DOMAIN.vercel.app
+components:
+  securitySchemes:
+    ActionToken:
+      type: http
+      scheme: bearer
+  schemas:
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start_pod, stop_pod, submit_job]
+        input:
+          type: object
+          description: Serverless endpoint-specific input payload for submit_job
+          additionalProperties: true
+security:
+  - ActionToken: []
+paths:
+  /api/runpod:
+    get:
+      operationId: checkRunpod
+      summary: List pods or check a RunPod job
+      parameters:
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [pods, job_status]
+        - name: job_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: RunPod response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+    post:
+      operationId: operateRunpod
+      summary: Start or stop the configured pod, or submit a serverless job
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: RunPod response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
