@@ -20,3 +20,7 @@ crons = ["* * * * *"]
 WATCHDOG_DISCOVERY_ENABLED = "yes"
 WATCHDOG_EXPECTED_POD_NAME = "outdoor_silver_sparrow"
 # Deliberately NO WATCHDOG_ARMED. Paid operations remain disarmed.
+# KV is used for future auto-deploy protection; auto-arm remains OFF until verified.
+[[kv_namespaces]]
+binding = "WATCHDOG_STATE"
+id = "feb878c0e0434bae9ddeafe8b3aa76ce"
