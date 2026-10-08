@@ -1,5 +1,8 @@
 const GRAPHQL_URL = "https://api.runpod.io/graphql";
 const INVOKE_URL = "https://api.runpod.ai/v2";
+const MAX_TOTAL_BUDGET_USD = 2;
+const MAX_GPU_HOURLY_USD = 0.8;
+const RESERVED_COST_USD = 0.5; // conservative storage/setup allowance; not a provider quote
 
 function reply(res, status, value) {
   res.status(status).setHeader("Content-Type", "application/json");
@@ -43,8 +46,17 @@ export default async function handler(req, res) {
   const action = req.method === "GET" ? req.query.action : req.body?.action;
   const podId = process.env.RUNPOD_POD_ID;
   try {
-    if (req.method === "GET" && action === "gpu_types") {
+    if (req.method === "GET" && (action === "gpu_types" || action === "budget_preview")) {
       const data = await graphql("query { gpuTypes { id displayName memoryInGb secureCloud communityCloud lowestPrice(input: { gpuCount: 1 }) { minimumBidPrice uninterruptablePrice } } }");
+      if (action === "budget_preview") {
+        return reply(res, 200, {
+          budgetUsd: MAX_TOTAL_BUDGET_USD,
+          reserveUsd: RESERVED_COST_USD,
+          gpuHourlyLimitUsd: MAX_GPU_HOURLY_USD,
+          warning: "Prices are indicative RunPod API values; availability, storage and actual billed cost are not guaranteed. No GPU is started.",
+          gpuTypes: data.gpuTypes
+        });
+      }
       return reply(res, 200, data);
     }
     if (req.method === "GET" && action === "pods") {
@@ -52,6 +64,9 @@ export default async function handler(req, res) {
       return reply(res, 200, data);
     }
     if (req.method === "POST" && action === "create_pod") {
+      return reply(res, 423, { error: "Paid Pod creation locked until an independently verified automatic termination guard and preflight quote are installed. Use budget_preview." });
+    }
+    if (false && req.method === "POST" && action === "legacy_create_pod_disabled") {
       const gpuTypeId = req.body?.gpu_type_id;
       const cloudType = req.body?.cloud_type === "SECURE" ? "SECURE" : "COMMUNITY";
       const maxCostPerHr = Number(req.body?.max_cost_per_hr ?? 0.8);
@@ -93,15 +108,19 @@ export default async function handler(req, res) {
       const data = await graphql("mutation ($id: String!) { podTerminate(input: { podId: $id }) }", { id });
       return reply(res, 200, data);
     }
-    if (req.method === "POST" && (action === "start_pod" || action === "stop_pod")) {
+    if (req.method === "POST" && action === "start_pod") {
+      return reply(res, 423, { error: "Paid Pod resume locked until an independent timeout guard is installed." });
+    }
+    if (req.method === "POST" && action === "stop_pod") {
       if (!podId) return reply(res, 400, { error: "RUNPOD_POD_ID is not configured" });
-      const mutation = action === "start_pod"
-        ? "mutation ($id: String!) { podResume(input: { podId: $id, gpuCount: 1 }) { id desiredStatus } }"
-        : "mutation ($id: String!) { podStop(input: { podId: $id }) { id desiredStatus } }";
+      const mutation = "mutation ($id: String!) { podStop(input: { podId: $id }) { id desiredStatus } }";
       const data = await graphql(mutation, { id: podId });
       return reply(res, 200, data);
     }
     if (req.method === "POST" && action === "submit_job") {
+      return reply(res, 423, { error: "Billable Serverless submissions locked pending budget guard." });
+    }
+    if (false && req.method === "POST" && action === "legacy_submit_job_disabled") {
       if (!req.body?.input || typeof req.body.input !== "object" || Array.isArray(req.body.input)) {
         return reply(res, 400, { error: "input must be a JSON object" });
       }
