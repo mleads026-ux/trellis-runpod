@@ -66,42 +66,6 @@ export default async function handler(req, res) {
     if (req.method === "POST" && action === "create_pod") {
       return reply(res, 423, { error: "Paid Pod creation locked until an independently verified automatic termination guard and preflight quote are installed. Use budget_preview." });
     }
-    if (false && req.method === "POST" && action === "legacy_create_pod_disabled") {
-      const gpuTypeId = req.body?.gpu_type_id;
-      const cloudType = req.body?.cloud_type === "SECURE" ? "SECURE" : "COMMUNITY";
-      const maxCostPerHr = Number(req.body?.max_cost_per_hr ?? 0.8);
-      if (typeof gpuTypeId !== "string" || !gpuTypeId) return reply(res, 400, { error: "gpu_type_id is required" });
-      const types = await graphql("query { gpuTypes { id displayName memoryInGb } }");
-      const selected = types?.gpuTypes?.find(g => g.id === gpuTypeId);
-      if (!selected) return reply(res, 400, { error: "Unknown gpu_type_id" });
-      if (Number(selected.memoryInGb) < 24) return reply(res, 400, { error: "GPU rejected: TRELLIS asset factory requires at least 24GB VRAM", gpu: selected });
-      if (!Number.isFinite(maxCostPerHr) || maxCostPerHr <= 0 || maxCostPerHr > 1) return reply(res, 400, { error: "max_cost_per_hr must be > 0 and <= 1" });
-      const query = `mutation ($input: PodFindAndDeployOnDemandInput!) {
-        podFindAndDeployOnDemand(input: $input) { id name desiredStatus costPerHr gpuCount machine { podHostId } }
-      }`;
-      const input = {
-        name: "trellis-asset-factory",
-        cloudType,
-        gpuTypeId,
-        gpuCount: 1,
-        volumeInGb: 40,
-        containerDiskInGb: 50,
-        minVcpuCount: 4,
-        minMemoryInGb: 16,
-        imageName: "runpod/pytorch:2.4.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
-        dockerArgs: "",
-        ports: "22/tcp",
-        volumeMountPath: "/workspace",
-        env: []
-      };
-      const data = await graphql(query, { input });
-      const pod = data?.podFindAndDeployOnDemand;
-      if (pod?.costPerHr > maxCostPerHr) {
-        try { await graphql("mutation ($id: String!) { podTerminate(input: { podId: $id }) }", { id: pod.id }); } catch {}
-        return reply(res, 409, { error: "Created offer exceeded max_cost_per_hr and was terminated", quotedCostPerHr: pod.costPerHr });
-      }
-      return reply(res, 200, data);
-    }
     if (req.method === "POST" && action === "terminate_pod") {
       const id = req.body?.pod_id;
       if (typeof id !== "string" || !id) return reply(res, 400, { error: "pod_id is required" });
@@ -119,12 +83,6 @@ export default async function handler(req, res) {
     }
     if (req.method === "POST" && action === "submit_job") {
       return reply(res, 423, { error: "Billable Serverless submissions locked pending budget guard." });
-    }
-    if (false && req.method === "POST" && action === "legacy_submit_job_disabled") {
-      if (!req.body?.input || typeof req.body.input !== "object" || Array.isArray(req.body.input)) {
-        return reply(res, 400, { error: "input must be a JSON object" });
-      }
-      return reply(res, 200, await serverless("run", "POST", req.body.input));
     }
     if (req.method === "GET" && action === "job_status") {
       const id = req.query.job_id;
