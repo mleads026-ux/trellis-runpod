@@ -14,4 +14,5 @@ RUN python -m pip install "numpy<2" "transformers==4.44.2"
 COPY scripts/ /opt/trellis-runpod/scripts/
 ENV PYTHONPATH=/opt/TRELLIS
 WORKDIR /workspace
-CMD ["bash"]
+EXPOSE 8000
+CMD ["python", "/opt/trellis-runpod/scripts/trellis_api_server.py"]
