@@ -20,6 +20,34 @@ export default {
         return respond(503, { status: "storage_error", service: "trellis-r2" });
       }
     }
+    // Private binary model transfer. Reuses ACTION_API_KEY; never exposes R2 publicly.
+    if (url.pathname.startsWith("/api/models/")) {
+      if (!env.ACTION_API_KEY || request.headers.get("Authorization") !== `Bearer ${env.ACTION_API_KEY}`) return respond(401, { error: "Unauthorized" });
+      if (!env.TRELLIS_OUTPUTS) return respond(503, { error: "R2 not configured" });
+      const name = url.pathname.slice("/api/models/".length);
+      if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}\\.glb$/.test(name) || name.includes("..")) return respond(400, { error: "Invalid GLB filename" });
+      const key = `models/${name}`;
+      if (request.method === "PUT") {
+        const length = Number(request.headers.get("Content-Length"));
+        if (!Number.isSafeInteger(length) || length < 1 || length > 100 * 1024 * 1024) return respond(413, { error: "GLB upload requires Content-Length of 1 to 100 MiB" });
+        if (request.headers.get("Content-Type") !== "model/gltf-binary") return respond(415, { error: "Content-Type must be model/gltf-binary" });
+        if (await env.TRELLIS_OUTPUTS.head(key)) return respond(409, { error: "Model already exists; refusing overwrite" });
+        const result = await env.TRELLIS_OUTPUTS.put(key, request.body, { httpMetadata: { contentType: "model/gltf-binary" }, onlyIf: { etagDoesNotMatch: "*" } });
+        if (!result) return respond(409, { error: "Model already exists" });
+        return respond(201, { status: "stored", filename: name, size: result.size, etag: result.httpEtag });
+      }
+      if (request.method === "GET") {
+        const object = await env.TRELLIS_OUTPUTS.get(key);
+        if (!object) return respond(404, { error: "Model not found" });
+        return new Response(object.body, { status: 200, headers: { "Content-Type": "model/gltf-binary", "Content-Length": String(object.size), "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } });
+      }
+      if (request.method === "HEAD") {
+        const object = await env.TRELLIS_OUTPUTS.head(key);
+        if (!object) return new Response(null, { status: 404 });
+        return new Response(null, { status: 200, headers: { "Content-Length": String(object.size), "Cache-Control": "private, no-store" } });
+      }
+      return respond(405, { error: "Method not allowed" });
+    }
     if (url.pathname !== "/api/runpod") return respond(404, { error: "Not found" });
     if (!env.RUNPOD_API_KEY || !env.ACTION_API_KEY) return respond(503, { error: "Required secrets not configured" });
     if (request.headers.get("Authorization") !== `Bearer ${env.ACTION_API_KEY}`) return respond(401, { error: "Unauthorized" });
