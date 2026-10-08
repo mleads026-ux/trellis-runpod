@@ -18,5 +18,5 @@ crons = ["* * * * *"]
 # so future Wrangler deploys do not silently remove dashboard-only variables.
 [vars]
 WATCHDOG_DISCOVERY_ENABLED = "yes"
-WATCHDOG_EXPECTED_POD_NAME = "trellis-a5000"
+WATCHDOG_EXPECTED_POD_NAME = "outdoor_silver_sparrow"
 # Deliberately NO WATCHDOG_ARMED. Paid operations remain disarmed.
