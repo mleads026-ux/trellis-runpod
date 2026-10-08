@@ -8,6 +8,7 @@ on:
       - .github/workflows/build-trellis-docker.yml
       - scripts/generate_trellis_and_backup.py
       - scripts/save_trellis_output.py
+      - scripts/trellis_api_server.py
 permissions:
   contents: read
   packages: write
