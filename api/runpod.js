@@ -47,13 +47,14 @@ export default async function handler(req, res) {
   const podId = process.env.RUNPOD_POD_ID;
   try {
     if (req.method === "GET" && (action === "gpu_types" || action === "budget_preview")) {
-      const data = await graphql("query { gpuTypes { id displayName memoryInGb secureCloud communityCloud lowestPrice(input: { gpuCount: 1 }) { minimumBidPrice uninterruptablePrice } } }");
+      const data = await graphql("query { gpuTypes { id displayName memoryInGb } }");
       if (action === "budget_preview") {
         return reply(res, 200, {
           budgetUsd: MAX_TOTAL_BUDGET_USD,
           reserveUsd: RESERVED_COST_USD,
           gpuHourlyLimitUsd: MAX_GPU_HOURLY_USD,
-          warning: "Prices are indicative RunPod API values; availability, storage and actual billed cost are not guaranteed. No GPU is started.",
+          warning: "GPU metadata only. Hourly prices and storage costs are NOT returned or verified by this query. Do not start a GPU.",
+          pricesVerified: false,
           gpuTypes: data.gpuTypes
         });
       }
