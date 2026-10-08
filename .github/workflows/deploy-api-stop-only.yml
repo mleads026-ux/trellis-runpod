@@ -1,0 +1,33 @@
+name: Deploy RunPod API stop-only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: runpod-watchdog-disarmed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify paid operations locked and termination disabled
+        shell: bash
+        run: |
+          grep -q 'Pod termination disabled by owner preference' src/worker.js
+          grep -q 'Billable actions locked' src/worker.js
+          if grep -q 'podTerminate(input:' src/worker.js; then
+            echo "Refusing to deploy API with termination mutation"
+            exit 1
+          fi
+      - name: Deploy stop-only API Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.toml
