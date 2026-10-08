@@ -43,7 +43,7 @@ export async function watchdog(env, now=Date.now(), api=gql) {
 }
 export default {
   async scheduled(_event,env,ctx) {
-    ctx.waitUntil(Promise.allSettled([watchdog(env), discover(env), queueGuard(env)]).then(([w,d,g])=>{
+    ctx.waitUntil(Promise.allSettled([Promise.resolve({status:"legacy_termination_disabled"}), discover(env), queueGuard(env)]).then(([w,d,g])=>{
       if (w.status==="fulfilled") console.log("Watchdog:",w.value.status);
       else console.error("WATCHDOG FAILED:",String(w.reason));
       if (d.status==="fulfilled") console.log("Discovery:",d.value.status);
@@ -59,7 +59,7 @@ export default {
     if (request.method !== "GET" || url.pathname !== "/health") return new Response("Not found",{status:404});
     // Public probe: safe aggregated status only; no Pod IDs, names, credentials, or API error details.
     // Rate limiting and cache-control should be added before making this widely accessible.
-    const armed=env.WATCHDOG_ARMED==="yes";
+    const armed=false;
     try {
       const d=await discover(env);
       return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":d.status==="invalid_response"?"failed":"ok",terminationArmed:armed,automaticQueueProtection:env.WATCHDOG_AUTO_ARM==="yes"}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
