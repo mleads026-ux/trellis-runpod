@@ -39,3 +39,8 @@ test("unrelated pod is never terminated",async()=>{
  assert.equal((await watchdog(base,after,api)).status,"not_listed");
  assert.equal(terminated,false);
 });
+
+test("explicit RunPod termination rejection fails for retry",async()=>{
+ const api=async(_env,query)=>query.includes("podTerminate")?{podTerminate:false}:{myself:{pods:[{id:"test-pod"}]}};
+ await assert.rejects(watchdog(base,after,api),/not accepted/);
+});
