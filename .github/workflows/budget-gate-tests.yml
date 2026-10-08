@@ -1,0 +1,34 @@
+name: RunPod budget gate tests
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/runpod_budget_gate.py'
+      - '.github/workflows/budget-gate-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  budget-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify valid conservative planning
+        run: |
+          python scripts/runpod_budget_gate.py --gpu-hourly 0.16 --storage-hourly 0.02 > result.json
+          python -c 'import json; r=json.load(open("result.json")); assert r["maximum_planned_minutes"]==400; assert r["hard_spend_cap"] is False'
+      - name: Reject negative or missing prices
+        run: |
+          if python scripts/runpod_budget_gate.py --gpu-hourly -1 --storage-hourly 0; then exit 1; fi
+          if python scripts/runpod_budget_gate.py --gpu-hourly 0.16; then exit 1; fi
+      - name: Reject insufficient budget
+        run: |
+          if python scripts/runpod_budget_gate.py --gpu-hourly 10 --storage-hourly 0 --budget 0.1; then exit 1; fi
+      - name: Verify no GPU is started
+        run: echo 'Offline calculations only. No RunPod credentials or API calls.'
