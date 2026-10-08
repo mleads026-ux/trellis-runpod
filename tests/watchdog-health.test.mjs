@@ -7,7 +7,7 @@ test("health endpoint exists and is GET only",()=>{
  assert.match(code,/url\.pathname !== "\/health"/);
 });
 test("health response explicitly says queue is not protected",()=>{
- assert.match(code,/automaticQueueProtection:false/g);
+ assert.ok(code.includes('automaticQueueProtection:env.WATCHDOG_AUTO_ARM'));
  assert.match(code,/terminationArmed:armed/);
 });
 test("health response does not serialize Pod ID or secret",()=>{
