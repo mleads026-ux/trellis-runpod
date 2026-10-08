@@ -9,6 +9,8 @@ on:
       - 'tests/test_trellis_pipeline.py'
       - 'tests/test_trellis_preflight.py'
       - 'scripts/trellis_preflight.py'
+      - 'scripts/check_gpu_budget.py'
+      - 'tests/test_gpu_budget.py'
       - '.github/workflows/check-trellis-pipeline.yml'
 
 permissions:
@@ -24,6 +26,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check Python syntax
-        run: python -m py_compile scripts/generate_trellis_and_backup.py scripts/save_trellis_output.py scripts/trellis_preflight.py
+        run: python -m py_compile scripts/generate_trellis_and_backup.py scripts/save_trellis_output.py scripts/trellis_preflight.py scripts/check_gpu_budget.py
       - name: Test fail-closed paths (no GPU, no cloud secrets)
         run: python -m unittest discover -s tests -p test_trellis_pipeline.py -v
