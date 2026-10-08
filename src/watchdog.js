@@ -1,3 +1,4 @@
+import { discover } from "./pod-discovery.js";
 // Standalone Cloudflare scheduled watchdog. NOT ARMED by default.
 // Deploy as a separate Worker only after mock tests and explicit authorization.
 // Required runtime secrets: RUNPOD_API_KEY, WATCHDOG_POD_ID, WATCHDOG_DEADLINE_UTC,
@@ -40,7 +41,7 @@ export async function watchdog(env, now=Date.now(), api=gql) {
 }
 export default {
   async scheduled(_event,env,ctx) {
-    ctx.waitUntil(watchdog(env).then(r=>console.log("Watchdog:",r.status)).catch(e=>{
+    ctx.waitUntil(Promise.all([watchdog(env), discover(env)]).then(([w,d])=>console.log("Watchdog:",w.status,"Discovery:",d.status)).catch(e=>{
       console.error("WATCHDOG FAILED:",String(e));
       throw e;
     }));
