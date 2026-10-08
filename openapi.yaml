@@ -18,7 +18,16 @@ components:
       properties:
         action:
           type: string
-          enum: [start_pod, stop_pod, submit_job]
+          enum: [create_pod, start_pod, stop_pod, terminate_pod, submit_job]
+        gpu_type_id:
+          type: string
+        cloud_type:
+          type: string
+          enum: [COMMUNITY, SECURE]
+        max_cost_per_hr:
+          type: number
+        pod_id:
+          type: string
         input:
           type: object
           description: Serverless endpoint-specific input payload for submit_job
@@ -29,14 +38,14 @@ paths:
   /api/runpod:
     get:
       operationId: checkRunpod
-      summary: List pods or check a RunPod job
+      summary: List pods, inspect GPU types, or check a RunPod job
       parameters:
         - name: action
           in: query
           required: true
           schema:
             type: string
-            enum: [pods, job_status]
+            enum: [pods, gpu_types, job_status]
         - name: job_id
           in: query
           required: false
@@ -63,7 +72,7 @@ paths:
                 additionalProperties: true
     post:
       operationId: operateRunpod
-      summary: Start or stop the configured pod, or submit a serverless job
+      summary: Create, start, stop or terminate a pod, or submit a serverless job
       requestBody:
         required: true
         content:
