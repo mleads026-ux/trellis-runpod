@@ -73,7 +73,7 @@ export default async function handler(req, res) {
         containerDiskInGb: 50,
         minVcpuCount: 4,
         minMemoryInGb: 16,
-        imageName: "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04",
+        imageName: "runpod/pytorch:2.4.0-py3.10-cuda11.8.0-devel-ubuntu22.04",
         dockerArgs: "",
         ports: "22/tcp",
         volumeMountPath: "/workspace",
