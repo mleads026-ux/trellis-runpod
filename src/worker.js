@@ -11,6 +11,15 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") return respond(200, { status: "ok", service: "trellis-runpod-api", paidOperations: "locked" });
+    if (url.pathname === "/api/storage-health" && request.method === "GET") {
+      if (!env.TRELLIS_OUTPUTS) return respond(503, { status: "unconfigured", service: "trellis-r2" });
+      try {
+        const marker = await env.TRELLIS_OUTPUTS.head("_healthcheck/connection-probe");
+        return respond(200, { status: "connected", service: "trellis-r2", bucket: "trellis-3d-outputs", probeObjectPresent: Boolean(marker) });
+      } catch (_error) {
+        return respond(503, { status: "storage_error", service: "trellis-r2" });
+      }
+    }
     if (url.pathname !== "/api/runpod") return respond(404, { error: "Not found" });
     if (!env.RUNPOD_API_KEY || !env.ACTION_API_KEY) return respond(503, { error: "Required secrets not configured" });
     if (request.headers.get("Authorization") !== `Bearer ${env.ACTION_API_KEY}`) return respond(401, { error: "Unauthorized" });
