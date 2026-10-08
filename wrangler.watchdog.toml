@@ -13,3 +13,10 @@ crons = ["* * * * *"]
 # Do not put RUNPOD_API_KEY, WATCHDOG_POD_ID, WATCHDOG_DEADLINE_UTC
 # or WATCHDOG_ARMED in this file. Set runtime secrets per environment.
 # WATCHDOG_ARMED must remain unset until explicitly authorized.
+
+# Read-only discovery; these values are not secrets. Keep them in source control
+# so future Wrangler deploys do not silently remove dashboard-only variables.
+[vars]
+WATCHDOG_DISCOVERY_ENABLED = "yes"
+WATCHDOG_EXPECTED_POD_NAME = "trellis-a5000"
+# Deliberately NO WATCHDOG_ARMED. Paid operations remain disarmed.
