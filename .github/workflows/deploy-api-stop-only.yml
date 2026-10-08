@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Test private R2 model transfer offline
+        run: node --experimental-default-type=module --test tests/r2-models.test.mjs
       - name: Verify paid operations locked and termination disabled
         shell: bash
         run: |
