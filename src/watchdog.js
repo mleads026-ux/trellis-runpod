@@ -46,7 +46,17 @@ export default {
       throw e;
     }));
   },
-  async fetch() {return new Response(JSON.stringify({status:"watchdog",armedByDefault:false}),{
-    status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}
-  });}
+  async fetch(request,env) {
+    const url=new URL(request.url);
+    if (request.method !== "GET" || url.pathname !== "/health") return new Response("Not found",{status:404});
+    // Public probe: safe aggregated status only; no Pod IDs, names, credentials, or API error details.
+    // Rate limiting and cache-control should be added before making this widely accessible.
+    const armed=env.WATCHDOG_ARMED==="yes";
+    try {
+      const d=await discover(env);
+      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:d.status,runpodConnection:d.status==="disabled"||d.status==="missing_runpod_secret"||d.status==="invalid_name"?"not_tested":"ok",terminationArmed:armed,automaticQueueProtection:false}),{status:200,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+    } catch (_error) {
+      return new Response(JSON.stringify({service:"trellis-runpod-watchdog",discovery:"error",runpodConnection:"failed",terminationArmed:armed,automaticQueueProtection:false}),{status:503,headers:{"Content-Type":"application/json","Cache-Control":"no-store"}});
+    }
+  }
 };
