@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: RunPod Control Bridge
-  version: 1.0.0
+  version: 1.1.0
   description: Control a configured RunPod pod and submit jobs to a configured Serverless endpoint.
 servers:
   - url: https://trellis-runpod.vercel.app
@@ -18,7 +18,7 @@ components:
       properties:
         action:
           type: string
-          enum: [create_pod, start_pod, stop_pod, terminate_pod, submit_job]
+          enum: [stop_pod, terminate_pod]
         gpu_type_id:
           type: string
         cloud_type:
@@ -45,7 +45,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [pods, gpu_types, job_status]
+            enum: [pods, gpu_types, budget_preview, job_status]
         - name: job_id
           in: query
           required: false
@@ -72,7 +72,7 @@ paths:
                 additionalProperties: true
     post:
       operationId: operateRunpod
-      summary: Create, start, stop or terminate a pod, or submit a serverless job
+      summary: Safely stop or terminate a pod; paid operations are locked
       requestBody:
         required: true
         content:
