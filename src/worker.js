@@ -23,10 +23,7 @@ export default {
       }
       if (request.method === "GET" && action === "pods") return respond(200, await getData("query { myself { pods { id name desiredStatus costPerHr gpuCount } } }", {}, env));
       if (request.method === "POST" && ["create_pod", "start_pod", "submit_job"].includes(action)) return respond(423, { error: "Billable actions locked until independent budget protection is implemented" });
-      if (request.method === "POST" && action === "terminate_pod") {
-        if (typeof body.pod_id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(body.pod_id)) return respond(400, { error: "Valid pod_id required" });
-        return respond(200, await getData("mutation ($id: String!) { podTerminate(input: { podId: $id }) }", { id: body.pod_id }, env));
-      }
+      if (request.method === "POST" && action === "terminate_pod") return respond(423, { error: "Pod termination disabled by owner preference; use stop_pod instead" });
       if (request.method === "POST" && action === "stop_pod") {
         if (!env.RUNPOD_POD_ID) return respond(400, { error: "RUNPOD_POD_ID not configured" });
         return respond(200, await getData("mutation ($id: String!) { podStop(input: { podId: $id }) { id desiredStatus } }", { id: env.RUNPOD_POD_ID }, env));
