@@ -43,6 +43,10 @@ export default async function handler(req, res) {
   const action = req.method === "GET" ? req.query.action : req.body?.action;
   const podId = process.env.RUNPOD_POD_ID;
   try {
+    if (req.method === "GET" && action === "gpu_types") {
+      const data = await graphql("query { gpuTypes { id displayName memoryInGb secureCloud communityCloud lowestPrice(input: { gpuCount: 1 }) { minimumBidPrice uninterruptablePrice } } }");
+      return reply(res, 200, data);
+    }
     if (req.method === "GET" && action === "pods") {
       const data = await graphql("query { myself { pods { id name desiredStatus costPerHr gpuCount } } }");
       return reply(res, 200, data);
