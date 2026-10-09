@@ -65,7 +65,7 @@ jobs:
           docker run --rm --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/verify_model_manifest.py,dst=/tmp/verify_model_manifest.py,readonly" \
             --entrypoint python "$IMAGE" /tmp/verify_model_manifest.py
 
-      - name: Boot real server image without GPU: must fail closed
+      - name: "Boot real server image without GPU: must fail closed"
         env:
           IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
         run: |
