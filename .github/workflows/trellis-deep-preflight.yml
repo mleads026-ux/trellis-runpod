@@ -5,7 +5,7 @@ on:
     branches: [fix/trellis-safe-build-preflight-20261009]
     paths:
       - scripts/verify_model_manifest.py
-      - tests/test_runtime_integration.py
+      - 'tests/test_*.py'
       - .github/workflows/trellis-deep-preflight.yml
   workflow_dispatch:
 
@@ -57,7 +57,7 @@ jobs:
           IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
         run: |
           docker run --rm --entrypoint python "$IMAGE" -m pip check
-          docker run --rm --entrypoint python "$IMAGE" /opt/trellis-runpod/scripts/preflight_trellis.py
+          docker run --rm --mount "type=bind,src=$GITHUB_WORKSPACE/scripts,dst=/opt/trellis-runpod/scripts,readonly" --entrypoint python "$IMAGE" /opt/trellis-runpod/scripts/preflight_trellis.py
 
       - name: Online Hugging Face checkpoint manifest, metadata ONLY
         env:
@@ -66,6 +66,35 @@ jobs:
           docker run --rm --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/verify_model_manifest.py,dst=/tmp/verify_model_manifest.py,readonly" \
             --entrypoint python "$IMAGE" /tmp/verify_model_manifest.py
 
+      - name: Validate new image and GLB guards inside real Docker runtime
+        env:
+          IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
+        run: |
+          docker run --rm -i \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/scripts,dst=/opt/trellis-runpod/scripts,readonly" \
+            -e PYTHONPATH=/opt/trellis-runpod/scripts \
+            --entrypoint python "$IMAGE" - <<'PY'
+          import io, json, struct
+          from PIL import Image
+          from trellis_api_server import validate_image_upload
+          from save_trellis_output import validate_glb_bytes
+          image = io.BytesIO()
+          Image.new("RGBA", (4, 4), (255, 0, 0, 255)).save(image, "PNG")
+          validate_image_upload(image.getvalue(), "image/png")
+          for bad, kind in [(b"corrupt", "image/png"), (image.getvalue(), "image/jpeg")]:
+              try: validate_image_upload(bad, kind)
+              except ValueError: pass
+              else: raise AssertionError("Corrupt/mismatched input was accepted")
+          payload = b'{"asset":{"version":"2.0"}}'
+          payload += b' ' * (-len(payload) % 4)
+          glb = struct.pack("<4sII", b"glTF", 2, 20+len(payload)) + struct.pack("<I4s", len(payload), b"JSON") + payload
+          validate_glb_bytes(glb)
+          try: validate_glb_bytes(b"garbage")
+          except ValueError: pass
+          else: raise AssertionError("Invalid GLB accepted")
+          print("PASS real Docker image validation, JPEG spoof protection, GLB integrity")
+          PY
+
       - name: "Boot real server image without GPU: must fail closed"
         env:
           IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
@@ -73,6 +102,7 @@ jobs:
           set -euo pipefail
           trap 'docker rm -f trellis-offline-api || true' EXIT
           docker run -d --name trellis-offline-api \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/scripts,dst=/opt/trellis-runpod/scripts,readonly" \
             -p 127.0.0.1:18080:8000 \
             -e TRELLIS_API_KEY=offline-test-key \
             -e TRELLIS_STORAGE_API_KEY=offline-test-storage \
