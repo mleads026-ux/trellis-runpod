@@ -38,12 +38,13 @@ jobs:
             console.log('PASS bearer protected image generation');
             const health=await fetch(base+'/api/trellis/health',{redirect:'manual'});
             const h=await health.json();
-            if(![200,502,503].includes(health.status)||!h || typeof h!=='object')throw Error('Health response is invalid');
+            if(health.status!==200||h.status!=='ready'||h.gpu?.ready!==true)throw Error('Migrated Pod is not ready through deployed Cloudflare Studio: HTTP '+health.status+' '+JSON.stringify(h));
             console.log('RunPod health HTTP',health.status,'status',h.status||'unavailable','GPU',h.gpu?.gpu||'not_detected','error',h.error||'none');
             try {
               const direct=await fetch('https://brfk02w0irs08f-8000.proxy.runpod.net/health',{redirect:'manual',signal:AbortSignal.timeout(12000)});
               const text=await direct.text();
               console.log('Direct RunPod Pod health HTTP',direct.status,'payload',text.slice(0,420));
+              if(direct.status!==200 || !JSON.parse(text).gpu?.ready) throw Error('Migrated RunPod Pod not ready directly');
             }catch(error){console.log('Direct RunPod Pod health failed:',error.name,String(error.message).slice(0,200));}
             console.log('PASS Worker health route returns sanitized JSON');
           })().catch(e=>{console.error(e);process.exit(1)});
