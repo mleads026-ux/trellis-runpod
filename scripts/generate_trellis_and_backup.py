@@ -40,8 +40,14 @@ def main():
         parser.error(f"Original Microsoft TRELLIS dependencies not installed: {exc}")
     if not torch.cuda.is_available():
         parser.error("CUDA unavailable; do not attempt generation on CPU")
-    print("Loading Microsoft TRELLIS-image-large...", flush=True)
-    pipeline = TrellisImageTo3DPipeline.from_pretrained("microsoft/TRELLIS-image-large")
+    # Download all model files before loading so checkpoint paths resolve locally.
+    # TRELLIS upstream silently falls back to a fake ckpts/<name> HF repo on errors.
+    from huggingface_hub import snapshot_download
+    model_repo = "microsoft/TRELLIS-image-large"
+    print(f"Downloading/verifying {model_repo} checkpoint files...", flush=True)
+    model_dir = snapshot_download(repo_id=model_repo, repo_type="model")
+    print(f"Loading TRELLIS from local directory: {model_dir}", flush=True)
+    pipeline = TrellisImageTo3DPipeline.from_pretrained(model_dir)
     pipeline.cuda()
     with Image.open(args.image) as img:
         image = img.convert("RGBA")
