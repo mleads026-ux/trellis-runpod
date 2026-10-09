@@ -9,6 +9,8 @@ on:
       - constraints-trellis.txt
       - 'scripts/**'
       - '.github/workflows/trellis-docker-build.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
