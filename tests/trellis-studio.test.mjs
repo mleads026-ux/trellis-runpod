@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import worker from "../src/trellis-studio-worker.js";
 const SITE = "https://studio.example.test";
-const POD = "https://o6ussh9yhl3r1h-8000.proxy.runpod.net";
+const POD = "https://brfk02w0irs08f-8000.proxy.runpod.net";
 const ID = "a".repeat(24);
 const auth = {Authorization: "Bearer this-is-a-test-secret"};
 function req(path, options={}) {
