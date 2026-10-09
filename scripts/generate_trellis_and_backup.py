@@ -30,6 +30,7 @@ def main():
     if not os.environ.get("TRELLIS_STORAGE_API_KEY"):
         parser.error("TRELLIS_STORAGE_API_KEY missing: refuse to generate without backup destination")
     os.environ.setdefault("SPCONV_ALGO", "native")
+    os.environ.setdefault("ATTN_BACKEND", "xformers")
     try:
         import torch
         from PIL import Image
