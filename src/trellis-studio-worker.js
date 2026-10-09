@@ -69,6 +69,8 @@ export default {
       const timeout = setTimeout(() => controller.abort(), 10000);
       try {
         const r = await fetch(POD + "/health", {signal:controller.signal,redirect:"manual"});
+        if (r.status === 404)
+          return json(503,{error:"RunPod proxy returned 404. Check that the Pod is running and its HTTP 8000 endpoint URL is still correct.",http_status:404});
         if (r.status !== 200 && r.status !== 503)
           return json(502,{error:"RunPod health endpoint unavailable",http_status:r.status});
         const value=await r.json();
