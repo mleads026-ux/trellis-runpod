@@ -1,3 +1,4 @@
+"""Authenticated TRELLIS image-to-GLB HTTP API for a running GPU Pod."""
 import json
 import os
 import secrets
@@ -7,9 +8,13 @@ import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from gpu_preflight import check_gpu
+
 jobs = {}
 busy = threading.Lock()
 root = Path("/workspace/trellis-jobs")
+# Check once at boot; /health will NOT claim success when CUDA or imports are broken.
+gpu_status = check_gpu()
 
 class API(BaseHTTPRequestHandler):
     def reply(self, code, obj):
@@ -26,7 +31,14 @@ class API(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self.reply(200, {"status": "up", "backup_ready": bool(os.getenv("TRELLIS_STORAGE_API_KEY"))})
+            backup_ready = bool(os.getenv("TRELLIS_STORAGE_API_KEY"))
+            ready = gpu_status["ready"] and backup_ready
+            return self.reply(200 if ready else 503, {
+                "status": "ready" if ready else "not_ready",
+                "gpu": gpu_status,
+                "backup_ready": backup_ready,
+                "message": None if ready else "Do not submit paid generation; inspect issues and Pod settings.",
+            })
         if not self.auth():
             return self.reply(401, {"error": "unauthorized"})
         if self.path.startswith("/jobs/"):
@@ -39,6 +51,8 @@ class API(BaseHTTPRequestHandler):
             return self.reply(404, {"error": "not found"})
         if not self.auth():
             return self.reply(401, {"error": "unauthorized"})
+        if not gpu_status["ready"]:
+            return self.reply(503, {"error": "GPU preflight failed", "issues": gpu_status["issues"]})
         if not os.getenv("TRELLIS_STORAGE_API_KEY"):
             return self.reply(503, {"error": "backup key missing"})
         try:
@@ -68,7 +82,11 @@ class API(BaseHTTPRequestHandler):
 def run(job_id, image):
     try:
         output = root / (job_id + ".glb")
-        result = subprocess.run([sys.executable, "/opt/trellis-runpod/scripts/generate_trellis_and_backup.py", "--image", str(image), "--output", str(output)], capture_output=True, text=True, timeout=3600)
+        result = subprocess.run(
+            [sys.executable, "/opt/trellis-runpod/scripts/generate_trellis_and_backup.py",
+             "--image", str(image), "--output", str(output)],
+            capture_output=True, text=True, timeout=3600,
+        )
         if result.returncode:
             raise RuntimeError((result.stderr or result.stdout)[-800:])
         jobs[job_id] = {"status": "completed", "id": job_id, "backup": "verified", "output": str(output)}
@@ -80,4 +98,5 @@ def run(job_id, image):
 if __name__ == "__main__":
     if not os.getenv("TRELLIS_API_KEY"):
         sys.exit("TRELLIS_API_KEY required")
+    print(f"TRELLIS runtime readiness: {json.dumps(gpu_status)}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", 8000), API).serve_forever()
