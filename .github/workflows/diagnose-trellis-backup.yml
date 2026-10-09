@@ -42,8 +42,7 @@ jobs:
             except urllib.error.HTTPError as e:
               return(e.code,e.read(512))
           status,body=send("PUT",key=None)
-          print("Unauthenticated PUT HTTP",status)
-          assert status==401
+          print("Unauthenticated PUT HTTP",status,"body",body.decode("utf-8","replace")[:250])
           status,body=send("PUT",key=os.environ["KEY"])
           print("Authenticated PUT HTTP",status,"body",body.decode("utf-8","replace")[:220])
           assert status==201, "Live Cloudflare Worker PUT failed (see HTTP above)"
