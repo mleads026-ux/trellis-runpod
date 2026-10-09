@@ -205,6 +205,10 @@ class ServerDryRunTests(unittest.TestCase):
                 self.assertEqual(request("GET", "/jobs/fake")[0], 401)
                 self.assertEqual(request("POST", "/generate", authenticated=True)[0], 503)
                 app.gpu_status = {"ready": True, "issues": []}
+                self.assertEqual(request("GET", "/health")[0], 503)
+                self.assertEqual(request("POST", "/generate", authenticated=True)[0], 503)
+                app.storage_verified = True
+                app.storage_status = "upload_download_sha256_verified"
                 self.assertEqual(request("GET", "/health")[0], 200)
                 self.assertEqual(request("POST", "/generate", authenticated=True,
                                          body=b"invalid", content_type="text/plain")[0], 400)
