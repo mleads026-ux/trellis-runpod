@@ -1,6 +1,8 @@
 """Authenticated TRELLIS image-to-GLB HTTP API for a running GPU Pod."""
+import io
 import json
 import os
+import warnings
 import secrets
 import subprocess
 import sys
@@ -13,6 +15,29 @@ from gpu_preflight import check_gpu
 jobs = {}
 busy = threading.Lock()
 root = Path("/workspace/trellis-jobs")
+
+MAX_IMAGE_PIXELS = 16_777_216
+
+
+def validate_image_upload(payload, content_type):
+    """Reject corrupt, incorrectly typed, huge and fully transparent images."""
+    from PIL import Image
+    expected = {"image/png": "PNG", "image/jpeg": "JPEG"}[content_type]
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(payload)) as img:
+                if img.format != expected:
+                    raise ValueError("Image content does not match Content-Type")
+                if not (0 < img.width * img.height <= MAX_IMAGE_PIXELS):
+                    raise ValueError("Image dimensions out of bounds")
+                img.verify()
+            with Image.open(io.BytesIO(payload)) as img:
+                if "A" in img.getbands() and img.getchannel("A").getextrema()[1] == 0:
+                    raise ValueError("Image is entirely transparent")
+    except (OSError, ValueError, Image.DecompressionBombWarning, Image.DecompressionBombError) as exc:
+        raise ValueError(f"Invalid image data: {exc}") from exc
+
 # Check once at boot; /health will NOT claim success when CUDA or imports are broken.
 gpu_status = check_gpu()
 
@@ -59,7 +84,7 @@ class API(BaseHTTPRequestHandler):
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             return self.reply(400, {"error": "invalid length"})
-        kind = self.headers.get("Content-Type", "").split(";")[0]
+        kind = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if kind not in ("image/png", "image/jpeg") or not 0 < n <= 15 * 1024 * 1024:
             return self.reply(400, {"error": "PNG/JPEG required, maximum 15 MiB"})
         if not busy.acquire(blocking=False):
@@ -68,6 +93,7 @@ class API(BaseHTTPRequestHandler):
             data = self.rfile.read(n)
             if len(data) != n:
                 raise ValueError("incomplete image")
+            validate_image_upload(data, kind)
             job_id = secrets.token_hex(12)
             root.mkdir(parents=True, exist_ok=True)
             image = root / (job_id + (".png" if kind == "image/png" else ".jpg"))
@@ -89,6 +115,8 @@ def run(job_id, image):
         )
         if result.returncode:
             raise RuntimeError((result.stderr or result.stdout)[-800:])
+        if not output.is_file() or output.stat().st_size < 20:
+            raise RuntimeError("Generator reported success without a valid-sized GLB output")
         jobs[job_id] = {"status": "completed", "id": job_id, "backup": "verified", "output": str(output)}
     except Exception as exc:
         jobs[job_id] = {"status": "failed", "id": job_id, "error": str(exc)[-800:]}
