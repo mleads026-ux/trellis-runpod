@@ -7,7 +7,9 @@ Optional: TRELLIS_STORAGE_BASE_URL=https://trellis-runpod-api.mleads026.workers.
 Requires only Python standard library. Never print the secret.
 """
 import hashlib
+import json
 import os
+import struct
 import pathlib
 import re
 import sys
@@ -22,6 +24,32 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def validate_glb_bytes(data):
+    """Validate GLB 2.0 header and JSON chunk before any cloud upload."""
+    if len(data) < 20:
+        raise ValueError("GLB header is incomplete")
+    magic, version, declared_length = struct.unpack_from("<4sII", data)
+    if magic != b"glTF" or version != 2 or declared_length != len(data):
+        raise ValueError("Invalid GLB magic, version or declared file length")
+    chunk_len, chunk_type = struct.unpack_from("<I4s", data, 12)
+    if chunk_type != b"JSON" or chunk_len < 4 or chunk_len % 4 or 20 + chunk_len > len(data):
+        raise ValueError("Invalid GLB JSON chunk")
+    try:
+        config = json.loads(data[20:20 + chunk_len].decode("utf-8").rstrip(" "))
+        if config.get("asset", {}).get("version") != "2.0":
+            raise ValueError("GLB asset.version must be 2.0")
+    except (UnicodeDecodeError, json.JSONDecodeError, AttributeError) as exc:
+        raise ValueError(f"Invalid GLB JSON: {exc}") from exc
+    cursor = 20 + chunk_len
+    if cursor < len(data):
+        if cursor + 8 > len(data):
+            raise ValueError("Incomplete GLB binary chunk header")
+        binary_len, binary_type = struct.unpack_from("<I4s", data, cursor)
+        if binary_type != bytes([66, 73, 78, 0]) or binary_len % 4 or cursor + 8 + binary_len != len(data):
+            raise ValueError("Invalid GLB binary chunk")
+    return True
+
+
 def main():
     if len(sys.argv) != 2:
         raise ValueError("Expected one .glb file path")
@@ -34,6 +62,7 @@ def main():
     if not secret:
         raise ValueError("TRELLIS_STORAGE_API_KEY is missing; do not stop the Pod")
     data = source.read_bytes()
+    validate_glb_bytes(data)
     # Random unique name, avoiding overwrites and collision with earlier outputs.
     import secrets
     stem = re.sub(r"[^a-zA-Z0-9_-]", "-", source.stem)[:55].strip("-") or "model"
