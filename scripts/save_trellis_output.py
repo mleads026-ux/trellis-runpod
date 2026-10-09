@@ -18,6 +18,8 @@ import urllib.request
 
 BASE = os.environ.get("TRELLIS_STORAGE_BASE_URL", "https://trellis-runpod-api.mleads026.workers.dev").rstrip("/")
 LIMIT = 100 * 1024 * 1024
+# Cloudflare Browser Integrity Check can reject Python-urllib default (1010).
+USER_AGENT = "TRELLIS-RunPod-Backup/1.0 (+https://github.com/mleads026-ux/trellis-runpod)"
 
 
 def digest(data):
@@ -68,7 +70,7 @@ def main():
     stem = re.sub(r"[^a-zA-Z0-9_-]", "-", source.stem)[:55].strip("-") or "model"
     name = f"{stem}-{secrets.token_hex(8)}.glb"
     url = BASE + "/api/models/" + name
-    headers = {"Authorization": "Bearer " + secret}
+    headers = {"Authorization": "Bearer " + secret, "User-Agent": USER_AGENT}
     put = urllib.request.Request(url, data=data, headers={**headers, "Content-Type": "model/gltf-binary"}, method="PUT")
     with urllib.request.urlopen(put, timeout=120) as response:
         if response.status != 201:
@@ -85,6 +87,12 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except urllib.error.HTTPError as exc:
+        hints = {401: "backup key rejected: verify Pod TRELLIS_STORAGE_API_KEY matches Worker ACTION_API_KEY",
+                 403: "Cloudflare access denied: check User-Agent / error code 1010",
+                 413: "upload too large: 100 MiB maximum"}
+        print(f"BACKUP_FAILED: HTTP {exc.code}; {hints.get(exc.code, 'inspect Cloudflare upload service')}; do not stop the Pod", file=sys.stderr)
+        sys.exit(1)
     except (ValueError, RuntimeError, OSError, urllib.error.URLError) as exc:
-        print(f"BACKUP_FAILED: {type(exc).__name__}; do not stop the Pod", file=sys.stderr)
+        print(f"BACKUP_FAILED: {type(exc).__name__}: {str(exc)[:180] if isinstance(exc, ValueError) else 'check storage and network'}; do not stop the Pod", file=sys.stderr)
         sys.exit(1)
