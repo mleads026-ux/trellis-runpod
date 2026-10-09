@@ -1,0 +1,45 @@
+name: TRELLIS Studio live public smoke test
+
+on:
+  push:
+    branches: [fix/trellis-safe-build-preflight-20261009]
+    paths:
+      - .github/workflows/trellis-studio-live-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test deployed Cloudflare Worker without RunPod API keys or paid jobs
+        shell: bash
+        run: |
+          node <<'NODE'
+          (async()=>{
+            const base='https://trellis-3d-studio.mleads026.workers.dev';
+            const page=await fetch(base,{redirect:'manual'});
+            const html=await page.text();
+            if(page.status!==200||!html.includes('TRELLIS_API_KEY')||!html.includes('/api/trellis/generate'))throw Error('Public Studio page unavailable');
+            if(page.headers.get('X-Frame-Options')!=='DENY')throw Error('UI missing frame protection');
+            console.log('PASS public Studio HTML + security headers');
+            const unauthorized=await fetch(base+'/api/trellis/jobs/'+'a'.repeat(24),{redirect:'manual'});
+            const body=await unauthorized.json();
+            if(unauthorized.status!==401||body.error!=='Valid Bearer token required')throw Error('Unauthenticated job request not rejected');
+            console.log('PASS bearer protected job status');
+            const denied=await fetch(base+'/api/trellis/generate',{method:'POST',redirect:'manual'});
+            if(denied.status!==401)throw Error('Unauthenticated generation was not rejected');
+            console.log('PASS bearer protected image generation');
+            const health=await fetch(base+'/api/trellis/health',{redirect:'manual'});
+            const h=await health.json();
+            if(![200,502,503].includes(health.status)||!h || typeof h!=='object')throw Error('Health response is invalid');
+            console.log('RunPod health HTTP',health.status,'status',h.status||'unavailable','GPU',h.gpu?.gpu||'not_detected');
+            console.log('PASS Worker health route returns sanitized JSON');
+          })().catch(e=>{console.error(e);process.exit(1)});
+          NODE
