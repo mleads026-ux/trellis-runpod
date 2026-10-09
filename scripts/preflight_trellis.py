@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""GPU-free TRELLIS dependency preflight used during Docker image build.
+"""GPU-free dependency audit of Microsoft's TRELLIS image -> GLB path.
 
-Model weights and GPU runtime are checked separately before any paid generation.
+This deliberately checks installed libraries without downloading weights or running
+CUDA kernels. Those checks must happen separately before paid GPU inference.
 """
 import importlib
 import os
@@ -10,14 +11,20 @@ import sys
 os.environ.setdefault("ATTN_BACKEND", "xformers")
 os.environ.setdefault("SPCONV_ALGO", "native")
 
+# Cover the *actual* inference and GLB post-processing path, not just torch.
 MODULES = (
     "torch", "torchvision", "PIL", "numpy", "transformers",
-    "huggingface_hub", "safetensors", "einops", "trimesh",
+    "huggingface_hub", "safetensors", "einops", "imageio",
+    "rembg", "onnxruntime", "cv2", "scipy", "trimesh", "open3d",
+    "pyvista", "pymeshfix", "xatlas", "igraph",
     "spconv.pytorch", "xformers.ops", "kaolin", "nvdiffrast.torch",
-    "diffoctreerast", "diff_gaussian_rasterization", "utils3d",
+    "diffoctreerast", "diff_gaussian_rasterization",
+    "utils3d", "utils3d.torch", "utils3d.io",
     "trellis", "trellis.models", "trellis.pipelines",
-    "trellis.utils.postprocessing_utils",
+    "trellis.renderers", "trellis.representations",
+    "trellis.utils.render_utils", "trellis.utils.postprocessing_utils",
 )
+
 failed = []
 for name in MODULES:
     try:
@@ -26,37 +33,37 @@ for name in MODULES:
     except Exception as exc:
         failed.append((name, f"{type(exc).__name__}: {exc}"))
         print(f"FAIL import {name}: {type(exc).__name__}: {exc}", flush=True)
-try:
-    from trellis.pipelines import TrellisImageTo3DPipeline
-    assert callable(TrellisImageTo3DPipeline.from_pretrained)
-    print("PASS TRELLIS pipeline entrypoint", flush=True)
-except Exception as exc:
-    failed.append(("TRELLIS pipeline", repr(exc)))
-try:
-    from trellis.utils import postprocessing_utils
-    assert callable(postprocessing_utils.to_glb)
-    print("PASS GLB export entrypoint", flush=True)
-except Exception as exc:
-    failed.append(("GLB export", repr(exc)))
 
-# Optional: perform model metadata check on a CPU machine before renting GPU.
-# Do not make an unreliable external network call mandatory during Docker build.
+try:
+    import torch
+    from trellis.pipelines import TrellisImageTo3DPipeline
+    from trellis.utils import postprocessing_utils
+    assert callable(TrellisImageTo3DPipeline.from_pretrained)
+    assert callable(postprocessing_utils.to_glb)
+    assert torch.version.cuda == "11.8", f"Unexpected torch CUDA: {torch.version.cuda}"
+    print("PASS official TRELLIS pipeline / GLB API and pinned CUDA ABI", flush=True)
+except Exception as exc:
+    failed.append(("TRELLIS pipeline / GLB / CUDA ABI", repr(exc)))
+
+# Remote model metadata is opt-in; never make a network request mandatory in
+# Docker build. Runtime weights (TRELLIS, DINOv2 and U2Net) are separate.
 if os.getenv("TRELLIS_CHECK_HF") == "1":
     try:
         from huggingface_hub import HfApi
         info = HfApi().model_info("microsoft/TRELLIS-image-large")
-        names = {file.rfilename for file in info.siblings}
-        if not any(name.endswith(".safetensors") for name in names):
-            raise RuntimeError("model repository has no safetensors checkpoints")
-        print(f"PASS Hugging Face checkpoint metadata ({len(names)} files)", flush=True)
+        names = {f.rfilename for f in info.siblings}
+        assert "pipeline.json" in names, "model pipeline.json missing"
+        assert any(n.endswith(".safetensors") for n in names), "checkpoints missing"
+        print(f"PASS HF model metadata ({len(names)} files)", flush=True)
     except Exception as exc:
-        failed.append(("Hugging Face model repository", repr(exc)))
+        failed.append(("HF model metadata", repr(exc)))
 else:
-    print("SKIP remote model metadata (use TRELLIS_CHECK_HF=1 to enable)", flush=True)
+    print("SKIP model downloads and online metadata (TRELLIS_CHECK_HF=1)", flush=True)
 
 if failed:
     print(f"PREFLIGHT FAILED: {len(failed)} check(s)", file=sys.stderr)
     for name, err in failed:
         print(f" - {name}: {err}", file=sys.stderr)
     sys.exit(1)
-print("PREFLIGHT PASSED: CPU imports. GPU inference NOT yet verified.", flush=True)
+
+print("PREFLIGHT PASSED: CPU imports. GPU kernels, cached model weights and generation NOT verified.", flush=True)
