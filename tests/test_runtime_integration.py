@@ -141,6 +141,8 @@ class BackupDryRunTests(unittest.TestCase):
 
             def fake_request(req, timeout=120):
                 seen.append((req.get_method(), req.full_url))
+                self.assertTrue(req.get_header("User-agent", "").startswith("TRELLIS-RunPod-Backup/"))
+                self.assertEqual(req.get_header("Authorization"), "Bearer offline-test-token")
                 if req.get_method() == "PUT":
                     self.assertEqual(req.data, raw)
                     return Response(status=201)
