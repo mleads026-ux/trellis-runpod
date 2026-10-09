@@ -1,0 +1,92 @@
+name: TRELLIS deep no-GPU integration tests
+
+on:
+  push:
+    branches: [fix/trellis-safe-build-preflight-20261009]
+    paths:
+      - scripts/verify_model_manifest.py
+      - tests/test_runtime_integration.py
+      - .github/workflows/trellis-deep-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  offline-tests:
+    name: Offline API, checkpoint and backup simulations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - run: python -m unittest discover -s tests -v
+
+  container-tests:
+    name: Real Docker image / online model manifest / fail-closed API
+    runs-on: ubuntu-24.04
+    needs: offline-tests
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free temporary runner space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache /usr/local/share/powershell
+          docker system prune -af
+          df -h
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull last successfully built image, no GPUs
+        env:
+          IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
+        run: |
+          docker pull "$IMAGE"
+          docker image inspect "$IMAGE" --format '{{.Id}} size={{.Size}}'
+
+      - name: Full dependency check and official TRELLIS imports
+        env:
+          IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
+        run: |
+          docker run --rm --entrypoint python "$IMAGE" -m pip check
+          docker run --rm --entrypoint python "$IMAGE" /opt/trellis-runpod/scripts/preflight_trellis.py
+
+      - name: Online Hugging Face checkpoint manifest, metadata ONLY
+        env:
+          IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
+        run: |
+          docker run --rm --mount "type=bind,src=$GITHUB_WORKSPACE/scripts/verify_model_manifest.py,dst=/tmp/verify_model_manifest.py,readonly" \
+            --entrypoint python "$IMAGE" /tmp/verify_model_manifest.py
+
+      - name: Boot real server image without GPU: must fail closed
+        env:
+          IMAGE: ghcr.io/mleads026-ux/trellis-runpod:cuda118-ac222e1d23bd
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f trellis-offline-api || true' EXIT
+          docker run -d --name trellis-offline-api \
+            -p 127.0.0.1:18080:8000 \
+            -e TRELLIS_API_KEY=offline-test-key \
+            -e TRELLIS_STORAGE_API_KEY=offline-test-storage \
+            "$IMAGE"
+          code=000
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /tmp/trellis-health.json -w '%{http_code}' http://127.0.0.1:18080/health || true)
+            [ "$code" = 503 ] && break
+            sleep 1
+          done
+          cat /tmp/trellis-health.json || true
+          [ "$code" = 503 ] || { docker logs trellis-offline-api; exit 1; }
+          python3 -c 'import json; d=json.load(open("/tmp/trellis-health.json")); assert d["status"]=="not_ready" and not d["gpu"]["ready"]'
+          post_code=$(curl -s -o /tmp/trellis-post.json -w '%{http_code}' \
+            -H 'Authorization: Bearer offline-test-key' -X POST http://127.0.0.1:18080/generate)
+          cat /tmp/trellis-post.json
+          [ "$post_code" = 503 ]
+          echo "PASS Docker API refuses generation when GPU is not attached"
