@@ -1,6 +1,6 @@
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9" SPCONV_ALGO=native
-RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs wget curl ca-certificates build-essential ninja-build libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git git-lfs wget curl ca-certificates build-essential ninja-build libgl1 libegl1 libopengl0 libglib2.0-0 libx11-6 libxext6 libsm6 libxrender1 && rm -rf /var/lib/apt/lists/*
 RUN wget -q https://repo.anaconda.com/miniconda/Miniconda3-py310_25.1.1-2-Linux-x86_64.sh -O /tmp/miniconda.sh && bash /tmp/miniconda.sh -b -p /opt/conda && rm /tmp/miniconda.sh
 ENV PATH=/opt/conda/bin:$PATH
 RUN conda create -n trellis python=3.10 -y && conda clean -afy
