@@ -41,6 +41,11 @@ def validate_image_upload(payload, content_type):
 # Check once at boot; /health will NOT claim success when CUDA or imports are broken.
 gpu_status = check_gpu()
 
+# Fail closed until this Pod has uploaded a test GLB to R2, downloaded it,
+# and verified its SHA-256. A configured key alone is NOT proof of access.
+storage_verified = False
+storage_status = "not_checked"
+
 class API(BaseHTTPRequestHandler):
     def reply(self, code, obj):
         data = json.dumps(obj).encode()
@@ -56,13 +61,16 @@ class API(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            backup_ready = bool(os.getenv("TRELLIS_STORAGE_API_KEY"))
-            ready = gpu_status["ready"] and backup_ready
+            backup_configured = bool(os.getenv("TRELLIS_STORAGE_API_KEY"))
+            ready = gpu_status["ready"] and backup_configured and storage_verified
             return self.reply(200 if ready else 503, {
                 "status": "ready" if ready else "not_ready",
                 "gpu": gpu_status,
-                "backup_ready": backup_ready,
-                "message": None if ready else "Do not submit paid generation; inspect issues and Pod settings.",
+                "backup_ready": ready,
+                "backup_configured": backup_configured,
+                "backup_verified": storage_verified,
+                "backup_preflight": storage_status,
+                "message": None if ready else "No paid generation: verify GPU and live R2 GLB upload/download before continuing.",
             })
         if not self.auth():
             return self.reply(401, {"error": "unauthorized"})
@@ -80,6 +88,8 @@ class API(BaseHTTPRequestHandler):
             return self.reply(503, {"error": "GPU preflight failed", "issues": gpu_status["issues"]})
         if not os.getenv("TRELLIS_STORAGE_API_KEY"):
             return self.reply(503, {"error": "backup key missing"})
+        if not storage_verified:
+            return self.reply(503, {"error": "R2 backup roundtrip not verified", "preflight": storage_status})
         try:
             n = int(self.headers.get("Content-Length", "0"))
         except ValueError:
@@ -126,5 +136,11 @@ def run(job_id, image):
 if __name__ == "__main__":
     if not os.getenv("TRELLIS_API_KEY"):
         sys.exit("TRELLIS_API_KEY required")
+    from storage_preflight import verify_backup
+
+    verification = verify_backup()
+    storage_verified = verification["verified"]
+    storage_status = verification["reason"]
+    print(f"TRELLIS storage preflight: {storage_status}", flush=True)
     print(f"TRELLIS runtime readiness: {json.dumps(gpu_status)}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", 8000), API).serve_forever()
