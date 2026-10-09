@@ -23,8 +23,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - name: Checkout tested branch
+      - name: Checkout exact source revision
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Free disk space on temporary runner
         run: |
@@ -54,7 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
-          VERSION="cuda118-${GITHUB_SHA:0:12}"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          VERSION="cuda118-${SOURCE_SHA:0:12}"
           docker tag secret-mission-trellis:cpu-verified "${IMAGE}:${VERSION}"
           docker tag secret-mission-trellis:cpu-verified "${IMAGE}:cuda118-verified"
           docker push "${IMAGE}:${VERSION}"
