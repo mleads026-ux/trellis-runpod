@@ -49,6 +49,12 @@ RUN python -m pip install spconv-cu118==2.3.8 \
     && python -m pip install --no-deps kaolin==0.16.0 \
        -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118.html
 
+# Kaolin's --no-deps avoids replacing the pinned CUDA PyTorch build, but its
+# published package metadata still requires these runtime packages. Install
+# them explicitly and let pip check enforce complete dependency resolution.
+RUN python -m pip install \
+    ipycanvas ipyevents jupyter-client pygltflib tornado usd-core
+
 # Compile CUDA rasterizers for the explicit GPU architectures above.
 RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast \
     && python -m pip install --no-build-isolation /tmp/nvdiffrast \
