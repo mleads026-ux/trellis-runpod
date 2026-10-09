@@ -148,3 +148,28 @@ test("missing job can't authorize R2 read",async t=>{
   const r=await worker.fetch(req("/api/trellis/download/"+ID,{headers:auth}),{});
   assert.equal(r.status,404);
 });
+
+test("recovery from failed backup authorizes valid local Pod job then reads R2",async t=>{
+  mockFetch(t,(url)=>{assert.equal(url,POD+"/jobs/"+ID);return Response.json({status:"failed",id:ID,error:"BACKUP_FAILED: HTTP 403"});});
+  const bytes=new Uint8Array([103,108,84,70,2,0,0,0]);
+  const env={TRELLIS_OUTPUTS:{
+    async list({prefix}){assert.equal(prefix,"models/"+ID+"-");return {objects:[{key:"models/"+ID+"-"+"b".repeat(16)+".glb"}]};},
+    async get(){return {body:bytes,size:bytes.length};}
+  }};
+  const r=await worker.fetch(req("/api/trellis/recover/"+ID,{headers:auth}),env);
+  assert.equal(r.status,200);assert.deepEqual(new Uint8Array(await r.arrayBuffer()),bytes);
+});
+test("recovery must reject an in-progress job",async t=>{
+  mockFetch(t,()=>Response.json({status:"running",id:ID}));
+  const r=await worker.fetch(req("/api/trellis/recover/"+ID,{headers:auth}),{});
+  assert.equal(r.status,409);
+});
+test("R2 recovery requires Pod bearer token",async()=>{
+  assert.equal((await worker.fetch(req("/api/trellis/recover/"+ID),{})).status,401);
+});
+test("R2 recovery refuses missing file even when job failed",async t=>{
+  mockFetch(t,()=>Response.json({status:"failed",id:ID}));
+  const env={TRELLIS_OUTPUTS:{async list(){return {objects:[]}}}};
+  const r=await worker.fetch(req("/api/trellis/recover/"+ID,{headers:auth}),env);
+  assert.equal(r.status,404);
+});
