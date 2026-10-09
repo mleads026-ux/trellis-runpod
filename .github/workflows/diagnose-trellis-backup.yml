@@ -31,8 +31,9 @@ jobs:
           doc+=b' '*((-len(doc))%4)
           raw=struct.pack('<4sII',b'glTF',2,20+len(doc))+struct.pack('<I4s',len(doc),b'JSON')+doc
           url="https://trellis-runpod-api.mleads026.workers.dev/api/models/diagnostic-"+os.environ["GITHUB_RUN_ID"]+".glb"
-          def send(method,key=None):
+          def send(method,key=None,user_agent=None):
             headers={"Content-Type":"model/gltf-binary"}
+            if user_agent: headers["User-Agent"]=user_agent
             if key is not None: headers["Authorization"]="Bearer "+key
             req=urllib.request.Request(url,headers=headers,method=method,data=raw if method=="PUT" else None)
             try:
@@ -43,10 +44,10 @@ jobs:
               return(e.code,e.read(512))
           status,body=send("PUT",key=None)
           print("Unauthenticated PUT HTTP",status,"body",body.decode("utf-8","replace")[:250])
-          status,body=send("PUT",key=os.environ["KEY"])
-          print("Authenticated PUT HTTP",status,"body",body.decode("utf-8","replace")[:220])
+          status,body=send("PUT",key=os.environ["KEY"],user_agent="TRELLIS-RunPod-Backup/1.0 (+https://github.com/mleads026-ux/trellis-runpod)")
+          print("Authenticated PUT with explicit User-Agent HTTP",status,"body",body.decode("utf-8","replace")[:220])
           assert status==201, "Live Cloudflare Worker PUT failed (see HTTP above)"
-          status,downloaded=send("GET",key=os.environ["KEY"])
+          status,downloaded=send("GET",key=os.environ["KEY"],user_agent="TRELLIS-RunPod-Backup/1.0 (+https://github.com/mleads026-ux/trellis-runpod)")
           print("Authenticated GET HTTP",status,"bytes",len(downloaded))
           assert status==200 and downloaded==raw
           print("PASS live GLB upload-download with GitHub storage secret; compare Pod secret separately")
