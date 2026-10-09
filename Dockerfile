@@ -11,6 +11,10 @@ WORKDIR /opt/TRELLIS
 # setup.sh installs CUDA extensions; build must have sufficient disk and memory.
 RUN bash -lc 'source /opt/conda/etc/profile.d/conda.sh && conda activate trellis && source ./setup.sh --basic --xformers --flash-attn --diffoctreerast --spconv --mipgaussian --kaolin --nvdiffrast'
 RUN python -m pip install "numpy<2" "transformers==4.44.2"
+# Explicit compatible Kaolin wheel: TRELLIS setup.sh can skip CUDA extras when Docker build has no GPU.
+RUN python -m pip install --no-cache-dir "kaolin==0.16.0" -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118.html
+# Fail the image build immediately if Kaolin cannot be imported in the runtime Python environment.
+RUN python -c "import torch, kaolin; print('Kaolin import OK; torch:', torch.__version__, 'kaolin:', kaolin.__version__)"
 COPY scripts/ /opt/trellis-runpod/scripts/
 ENV PYTHONPATH=/opt/TRELLIS
 WORKDIR /workspace
