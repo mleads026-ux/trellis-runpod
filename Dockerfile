@@ -1,5 +1,6 @@
-# This image targets RunPod NVIDIA Ampere/Ada GPUs (sm80/sm86/sm89).
-# RTX 50-series / Blackwell (sm120) requires a separate CUDA 12.8+ build.
+# Original Microsoft TRELLIS on RunPod NVIDIA Ampere/Ada GPUs (sm80/sm86/sm89).
+# This is NOT an RTX 5060/Blackwell (sm120) image: use CUDA 12.8+ and
+# Blackwell-compatible PyTorch + compiled extensions for that separate target.
 FROM nvidia/cuda:11.8.0-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
@@ -25,16 +26,14 @@ COPY constraints-trellis.txt /opt/trellis-runpod/constraints-trellis.txt
 RUN python -m pip install torch==2.4.0 torchvision==0.19.0 \
     --index-url https://download.pytorch.org/whl/cu118
 
-# Pin TRELLIS code and its FlexiCubes submodule; never pull moving main in production.
+# Pin TRELLIS and FlexiCubes source; do not use unversioned upstream main.
 RUN git clone https://github.com/microsoft/TRELLIS.git /opt/TRELLIS \
     && git -C /opt/TRELLIS checkout 442aa1e1afb9014e80681d3bf604e8d728a86ee7 \
     && git -C /opt/TRELLIS submodule update --init --recursive
 WORKDIR /opt/TRELLIS
 
-# Do not rely on setup.sh CUDA flags inside docker build:
-# torch.cuda.is_available() is normally false with no GPU passed to docker build,
-# so upstream setup.sh silently skips xformers, spconv and CUDA extension installs.
-# Install the upstream --basic requirements explicitly with a compatibility lock.
+# setup.sh checks torch.cuda.is_available() during installation; Docker builds
+# normally do not expose a GPU, causing important CUDA extras to be skipped.
 RUN python -m pip install \
     pillow imageio imageio-ffmpeg tqdm easydict opencv-python-headless \
     scipy ninja rembg onnxruntime trimesh open3d xatlas pyvista \
@@ -42,20 +41,16 @@ RUN python -m pip install \
     && python -m pip install \
     git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
 
-# These must exist even when docker image is built without an NVIDIA GPU.
 RUN python -m pip install spconv-cu118==2.3.8 \
     && python -m pip install --no-deps xformers==0.0.27.post2 \
        --index-url https://download.pytorch.org/whl/cu118 \
     && python -m pip install --no-deps kaolin==0.16.0 \
        -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118.html
 
-# Kaolin's --no-deps avoids replacing the pinned CUDA PyTorch build, but its
-# published package metadata still requires these runtime packages. Install
-# them explicitly and let pip check enforce complete dependency resolution.
+# Kaolin metadata requires jupyter-client<8. The constraints file pins 7.4.9.
 RUN python -m pip install \
     ipycanvas ipyevents jupyter-client pygltflib tornado usd-core
 
-# Compile CUDA rasterizers for the explicit GPU architectures above.
 RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast \
     && python -m pip install --no-build-isolation /tmp/nvdiffrast \
     && rm -rf /tmp/nvdiffrast
@@ -66,10 +61,17 @@ RUN git clone --depth 1 https://github.com/autonomousvision/mip-splatting.git /t
     && python -m pip install --no-build-isolation /tmp/mip-splatting/submodules/diff-gaussian-rasterization/ \
     && rm -rf /tmp/mip-splatting
 
-ENV PYTHONPATH=/opt/TRELLIS
+# Keep large downloaded checkpoint caches on /workspace, which can be mounted as
+# a persistent volume. Build does NOT download weights or require a GPU.
+ENV PYTHONPATH=/opt/TRELLIS \
+    HF_HOME=/workspace/trellis-cache/huggingface \
+    TORCH_HOME=/workspace/trellis-cache/torch \
+    U2NET_HOME=/workspace/trellis-cache/u2net
 COPY scripts/ /opt/trellis-runpod/scripts/
-# No GPU is required for this stage; no model download is attempted here.
-RUN python -m pip check \
+
+# Verify source syntax, complete dependency resolution and image-to-GLB imports.
+RUN python -m compileall -q /opt/TRELLIS /opt/trellis-runpod/scripts \
+    && python -m pip check \
     && python /opt/trellis-runpod/scripts/preflight_trellis.py
 WORKDIR /workspace
 EXPOSE 8000
