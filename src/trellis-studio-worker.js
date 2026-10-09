@@ -82,8 +82,9 @@ export default {
         const type = (request.headers.get("Content-Type")||"").split(";")[0].trim().toLowerCase();
         if (!["image/png","image/jpeg"].includes(type))
           return json(415,{error:"Only PNG or JPEG images are accepted"});
-        const length = Number(request.headers.get("Content-Length"));
-        if (!Number.isInteger(length) || length < 1 || length > MAX_IMAGE)
+        const declared = request.headers.get("Content-Length");
+        const length = declared === null ? null : Number(declared);
+        if (declared !== null && (!Number.isInteger(length) || length < 1 || length > MAX_IMAGE))
           return json(413,{error:"Image must be 1 to 15 MiB"});
         const data = await request.arrayBuffer();
         if (!data.byteLength || data.byteLength > MAX_IMAGE)
