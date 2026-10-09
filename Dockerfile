@@ -10,7 +10,7 @@ RUN git clone --recurse-submodules https://github.com/microsoft/TRELLIS.git /opt
 WORKDIR /opt/TRELLIS
 # setup.sh installs CUDA extensions; build must have sufficient disk and memory.
 RUN bash -lc 'source /opt/conda/etc/profile.d/conda.sh && conda activate trellis && source ./setup.sh --basic --xformers --flash-attn --diffoctreerast --spconv --mipgaussian --kaolin --nvdiffrast'
-RUN python -m pip install "numpy<2" "transformers==4.44.2"
+RUN python -m pip install "numpy<2" "transformers==4.44.2" "einops"
 # Match the official TRELLIS PyTorch 2.4.0 / CUDA 11.8 xformers wheel even though build has no GPU.
 RUN python -m pip install "xformers==0.0.27.post2" --index-url https://download.pytorch.org/whl/cu118
 # Explicit compatible Kaolin wheel: TRELLIS setup.sh can skip CUDA extras when Docker build has no GPU.
@@ -28,10 +28,10 @@ RUN git clone --depth 1 https://github.com/autonomousvision/mip-splatting.git /t
     python -m pip install --no-build-isolation /tmp/mip-splatting/submodules/diff-gaussian-rasterization/ && \
     rm -rf /tmp/mip-splatting
 RUN python -c "import torch, kaolin, xformers.ops, nvdiffrast.torch, diffoctreerast, diff_gaussian_rasterization; from trellis.models import sparse_structure_flow; from trellis.pipelines import TrellisImageTo3DPipeline; from trellis.utils import postprocessing_utils; print('TRELLIS core and CUDA rasterizer imports OK')"
+ENV PYTHONPATH=/opt/TRELLIS
 COPY scripts/ /opt/trellis-runpod/scripts/
 # CPU-only smoke tests: fail Docker build on missing TRELLIS deps, pipeline import, or broken HF model metadata.
 RUN python /opt/trellis-runpod/scripts/preflight_trellis.py
-ENV PYTHONPATH=/opt/TRELLIS
 WORKDIR /workspace
 EXPOSE 8000
 CMD ["python", "/opt/trellis-runpod/scripts/trellis_api_server.py"]
