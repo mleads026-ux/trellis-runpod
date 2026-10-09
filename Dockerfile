@@ -29,6 +29,8 @@ RUN git clone --depth 1 https://github.com/autonomousvision/mip-splatting.git /t
     rm -rf /tmp/mip-splatting
 RUN python -c "import torch, kaolin, xformers.ops, nvdiffrast.torch, diffoctreerast, diff_gaussian_rasterization; from trellis.models import sparse_structure_flow; from trellis.pipelines import TrellisImageTo3DPipeline; from trellis.utils import postprocessing_utils; print('TRELLIS core and CUDA rasterizer imports OK')"
 COPY scripts/ /opt/trellis-runpod/scripts/
+# CPU-only smoke tests: fail Docker build on missing TRELLIS deps, pipeline import, or broken HF model metadata.
+RUN python /opt/trellis-runpod/scripts/preflight_trellis.py
 ENV PYTHONPATH=/opt/TRELLIS
 WORKDIR /workspace
 EXPOSE 8000
