@@ -1,0 +1,6 @@
+# Prevent dependency upgrades that break CUDA 11.8 / PyTorch 2.4 on RunPod Ada/Ampere GPUs.
+numpy==1.26.4
+torch==2.4.0
+torchvision==0.19.0
+transformers==4.44.2
+opencv-python-headless==4.10.0.84
