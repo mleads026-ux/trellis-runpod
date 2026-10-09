@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import runpy
 import sys
+import struct
+import zlib
 import tempfile
 import threading
 import time
@@ -18,6 +20,22 @@ from http.client import HTTPConnection
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
+
+
+def valid_glb():
+    document = b'{"asset":{"version":"2.0"}}'
+    document += b" " * ((-len(document)) % 4)
+    return struct.pack("<4sII", b"glTF", 2, 20 + len(document)) + struct.pack("<I4s", len(document), b"JSON") + document
+
+
+def valid_png():
+    def chunk(tag, body):
+        return struct.pack(">I", len(body)) + tag + body + struct.pack(">I", zlib.crc32(tag + body))
+    return (bytes([137, 80, 78, 71, 13, 10, 26, 10])
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(bytes([0, 255, 0, 0, 255])))
+            + chunk(b"IEND", b""))
+
 
 
 def load_module(name, filename):
@@ -112,7 +130,7 @@ class BackupDryRunTests(unittest.TestCase):
         m = load_module("save_trellis_for_test", "save_trellis_output.py")
         with tempfile.TemporaryDirectory() as td:
             glb = Path(td) / "test.glb"
-            raw = b"glTF" + bytes(range(20))
+            raw = valid_glb()
             glb.write_bytes(raw)
             seen = []
 
@@ -191,7 +209,7 @@ class ServerDryRunTests(unittest.TestCase):
                 with mock.patch.object(app.subprocess, "run", return_value=types.SimpleNamespace(
                         returncode=1, stderr="offline test failure", stdout="")):
                     code, data = request("POST", "/generate", authenticated=True,
-                                         body=b"png-bytes", content_type="image/png")
+                                         body=valid_png(), content_type="image/png")
                     self.assertEqual(code, 202)
                     job_id = data["job_id"]
                     deadline = time.monotonic() + 3
