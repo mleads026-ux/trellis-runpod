@@ -1,0 +1,42 @@
+name: TRELLIS Docker CPU Build
+
+on:
+  push:
+    branches:
+      - fix/trellis-safe-build-preflight-20261009
+    paths:
+      - Dockerfile
+      - constraints-trellis.txt
+      - 'scripts/**'
+      - '.github/workflows/trellis-docker-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: Build and verify Docker image without rented GPU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout tested branch
+        uses: actions/checkout@v4
+
+      - name: Free disk space on temporary runner
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache /usr/local/share/powershell
+          sudo apt-get clean
+          docker system prune --all --force
+          df -h
+
+      - name: Docker build including pip check and TRELLIS imports
+        run: |
+          set -o pipefail
+          docker build --progress=plain --tag secret-mission-trellis:cpu-verified .
+          docker image inspect secret-mission-trellis:cpu-verified --format 'Image ID: {{.Id}}  Size: {{.Size}}'
+
+      - name: Show disk utilization
+        if: always()
+        run: df -h
