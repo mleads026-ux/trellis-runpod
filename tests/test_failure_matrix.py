@@ -123,6 +123,8 @@ class ServerLifecycleTests(unittest.TestCase):
         self.api.root = Path(self.tmp.name)
         self.api.jobs = {}
         self.api.busy = threading.Lock()
+        self.api.storage_verified = True
+        self.api.storage_status = 'upload_download_sha256_verified'
         self.env = mock.patch.dict(os.environ, {"TRELLIS_API_KEY": "test-local-key",
                                                "TRELLIS_STORAGE_API_KEY": "test-local-storage"})
         self.env.start()
@@ -158,6 +160,18 @@ class ServerLifecycleTests(unittest.TestCase):
                 return code, data
             time.sleep(0.02)
         self.fail("job did not complete in 5 seconds")
+
+    def test_r2_preflight_failure_blocks_paid_generation_even_with_configured_key(self):
+        self.api.storage_verified = False
+        self.api.storage_status = "r2_roundtrip_failed"
+        code, status = self.request("GET", "/health")
+        self.assertEqual(code, 503)
+        self.assertFalse(status["backup_verified"])
+        self.assertTrue(status["backup_configured"])
+        code, status = self.request("POST", "/generate", image=valid_png())
+        self.assertEqual(code, 503)
+        self.assertIn("roundtrip not verified", status["error"])
+        self.assertEqual(list(self.api.root.iterdir()), [])
 
     def test_authentication_blocks_submission_and_job_lookup(self):
         self.assertEqual(self.request("POST", "/generate", authorized=False, image=valid_png())[0], 401)
