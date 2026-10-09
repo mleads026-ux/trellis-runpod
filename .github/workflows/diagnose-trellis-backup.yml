@@ -14,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      KEY: \${{ secrets.STORAGE_TEST_API_KEY }}
+      KEY: ${{ secrets.STORAGE_TEST_API_KEY }}
     steps:
       - name: Test exact live GLB Worker route without any GPU usage
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -z "\${KEY}" ]]; then
+          if [[ -z "${KEY}" ]]; then
             echo "::error::STORAGE_TEST_API_KEY GitHub secret is missing; live secret test skipped"
             exit 1
           fi
-          echo "::add-mask::\${KEY}"
+          echo "::add-mask::${KEY}"
           python - <<'PY'
           import json,os,struct,urllib.request,urllib.error,hashlib
           doc=b'{"asset":{"version":"2.0"}}'
