@@ -13,8 +13,19 @@ RUN bash -lc 'source /opt/conda/etc/profile.d/conda.sh && conda activate trellis
 RUN python -m pip install "numpy<2" "transformers==4.44.2"
 # Explicit compatible Kaolin wheel: TRELLIS setup.sh can skip CUDA extras when Docker build has no GPU.
 RUN python -m pip install --no-cache-dir "kaolin==0.16.0" -f https://nvidia-kaolin.s3.us-east-2.amazonaws.com/torch-2.4.0_cu118.html
-# Fail the image build immediately if Kaolin cannot be imported in the runtime Python environment.
-RUN python -c "import torch, kaolin; print('Kaolin import OK; torch:', torch.__version__, 'kaolin:', kaolin.__version__)"
+# TRELLIS setup.sh uses torch.cuda.is_available() to select CUDA extensions;
+# Docker image builds run without a visible GPU, so they can silently skip these.
+# Build critical rasterizers explicitly and fail the build if any import fails.
+RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast && \
+    python -m pip install --no-build-isolation /tmp/nvdiffrast && \
+    rm -rf /tmp/nvdiffrast
+RUN git clone --depth 1 --recurse-submodules https://github.com/JeffreyXiang/diffoctreerast.git /tmp/diffoctreerast && \
+    python -m pip install --no-build-isolation /tmp/diffoctreerast && \
+    rm -rf /tmp/diffoctreerast
+RUN git clone --depth 1 https://github.com/autonomousvision/mip-splatting.git /tmp/mip-splatting && \
+    python -m pip install --no-build-isolation /tmp/mip-splatting/submodules/diff-gaussian-rasterization/ && \
+    rm -rf /tmp/mip-splatting
+RUN python -c "import torch, kaolin, nvdiffrast.torch, diffoctreerast, diff_gaussian_rasterization; from trellis.pipelines import TrellisImageTo3DPipeline; from trellis.utils import postprocessing_utils; print('TRELLIS core and CUDA rasterizer imports OK')"
 COPY scripts/ /opt/trellis-runpod/scripts/
 ENV PYTHONPATH=/opt/TRELLIS
 WORKDIR /workspace
