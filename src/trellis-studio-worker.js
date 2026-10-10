@@ -2,7 +2,7 @@
 // Zero secrets in this Worker. The user enters the Pod bearer token in the browser;
 // it is forwarded only to the pinned HTTPS Pod origin and never persisted or logged.
 // Do not allow user-controlled target URLs or arbitrary proxy paths.
-const POD = "https://brfk02w0irs08f-8000.proxy.runpod.net";
+const POD = "https://89zylb8g34o8o5-8000.proxy.runpod.net";
 const JOB_ID = /^[0-9a-f]{24}$/;
 const MAX_IMAGE = 15 * 1024 * 1024;
 function json(status, payload) {
