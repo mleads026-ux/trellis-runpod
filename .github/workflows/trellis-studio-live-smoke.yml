@@ -41,7 +41,7 @@ jobs:
             if(health.status!==200||h.status!=='ready'||h.gpu?.ready!==true)throw Error('Migrated Pod is not ready through deployed Cloudflare Studio: HTTP '+health.status+' '+JSON.stringify(h));
             console.log('RunPod health HTTP',health.status,'status',h.status||'unavailable','GPU',h.gpu?.gpu||'not_detected','error',h.error||'none');
             try {
-              const direct=await fetch('https://brfk02w0irs08f-8000.proxy.runpod.net/health',{redirect:'manual',signal:AbortSignal.timeout(12000)});
+              const direct=await fetch('https://89zylb8g34o8o5-8000.proxy.runpod.net/health',{redirect:'manual',signal:AbortSignal.timeout(12000)});
               const text=await direct.text();
               console.log('Direct RunPod Pod health HTTP',direct.status,'payload',text.slice(0,420));
               if(direct.status!==200 || !JSON.parse(text).gpu?.ready) throw Error('Migrated RunPod Pod not ready directly');
