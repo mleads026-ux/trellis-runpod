@@ -1,20 +1,21 @@
-"""Docker CPU dependency audit; does not download weights or claim GPU readiness."""
+"""Docker CPU dependency audit; GPU extensions are checked when a Pod boots."""
 import importlib
 
 
 def main():
-    from gpu_preflight_trellis2 import MODULES
-    for name in (*MODULES, "transformers", "PIL", "safetensors", "utils3d"):
+    # flex_gemm/cumesh initialize Triton's active backend at import time. A Docker
+    # build runner has no GPU, so importing them here fails even though their CUDA
+    # extensions compiled successfully. gpu_preflight_trellis2 checks them at Pod boot.
+    modules = ("torch", "torchvision", "xformers.ops", "transformers",
+               "PIL", "numpy", "safetensors", "utils3d", "huggingface_hub")
+    for name in modules:
         importlib.import_module(name)
         print(f"PASS import {name}", flush=True)
     import torch
     from transformers import DINOv3ViTModel
-    from trellis2.pipelines import Trellis2ImageTo3DPipeline
-    from o_voxel.postprocess import to_glb
     assert torch.version.cuda == "12.4", torch.version.cuda
-    assert callable(Trellis2ImageTo3DPipeline.from_pretrained)
-    assert callable(to_glb)
-    print("TRELLIS.2 CPU IMPORTS PASS; GPU kernels, gated model access and generation NOT tested")
+    assert callable(DINOv3ViTModel.from_pretrained)
+    print("TRELLIS.2 CPU-SAFE IMPORTS PASS; GPU extensions are verified on Pod boot")
 
 
 if __name__ == "__main__":
