@@ -1,0 +1,48 @@
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+ENV DEBIAN_FRONTEND=noninteractive PIP_NO_CACHE_DIR=1 \
+    CUDA_HOME=/usr/local/cuda TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9;9.0" \
+    MAX_JOBS=2 ATTN_BACKEND=xformers SPARSE_ATTN_BACKEND=xformers \
+    SPARSE_CONV_BACKEND=flex_gemm TRELLIS_BACKEND=trellis2 \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    OPENCV_IO_ENABLE_OPENEXR=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-dev python3-pip python-is-python3 git git-lfs \
+    ca-certificates build-essential ninja-build libjpeg-dev libgl1 libegl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY constraints-trellis2.txt /opt/trellis-runpod/constraints-trellis2.txt
+ENV PIP_CONSTRAINT=/opt/trellis-runpod/constraints-trellis2.txt
+RUN python -m pip install --upgrade pip setuptools wheel packaging \
+    && python -m pip install torch==2.6.0 torchvision==0.21.0 \
+       --index-url https://download.pytorch.org/whl/cu124 \
+    && python -m pip install xformers==0.0.29.post3 \
+       --index-url https://download.pytorch.org/whl/cu124
+# Do not run upstream setup.sh: its hardware detection exits on CPU build runners.
+RUN git clone https://github.com/microsoft/TRELLIS.2.git /opt/TRELLIS.2 \
+    && git -C /opt/TRELLIS.2 checkout 75fbf0183001ed9876c8dbb35de6b68552ee08bd \
+    && git -C /opt/TRELLIS.2 submodule update --init --recursive
+WORKDIR /opt/TRELLIS.2
+RUN python -m pip install pillow imageio imageio-ffmpeg tqdm easydict \
+    opencv-python-headless ninja trimesh transformers huggingface_hub safetensors \
+    einops scipy pandas lpips zstandard kornia timm tensorboard \
+    && python -m pip install \
+    git+https://github.com/EasternJournalist/utils3d.git@9a4eb15e4021b67b12c460c7057d642626897ec8
+RUN git clone --depth 1 --branch v0.4.0 https://github.com/NVlabs/nvdiffrast.git /tmp/nvdiffrast \
+    && python -m pip install --no-build-isolation /tmp/nvdiffrast \
+    && rm -rf /tmp/nvdiffrast
+RUN git clone --recursive https://github.com/JeffreyXiang/CuMesh.git /tmp/CuMesh \
+    && python -m pip install --no-build-isolation /tmp/CuMesh \
+    && rm -rf /tmp/CuMesh
+RUN git clone --recursive https://github.com/JeffreyXiang/FlexGEMM.git /tmp/FlexGEMM \
+    && python -m pip install --no-build-isolation /tmp/FlexGEMM \
+    && rm -rf /tmp/FlexGEMM
+RUN python -m pip install --no-build-isolation ./o-voxel
+ENV PYTHONPATH=/opt/TRELLIS.2 \
+    HF_HOME=/workspace/trellis2-cache/huggingface \
+    TORCH_HOME=/workspace/trellis2-cache/torch
+COPY scripts/ /opt/trellis-runpod/scripts/
+RUN python -m compileall -q /opt/TRELLIS.2/trellis2 /opt/trellis-runpod/scripts \
+    && python -m pip check \
+    && python /opt/trellis-runpod/scripts/preflight_trellis2.py
+WORKDIR /workspace
+EXPOSE 8000
+CMD ["python", "/opt/trellis-runpod/scripts/trellis_api_server.py"]

@@ -10,7 +10,15 @@ import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from gpu_preflight import check_gpu
+BACKEND = os.getenv("TRELLIS_BACKEND", "trellis1")
+if BACKEND == "trellis2":
+    from gpu_preflight_trellis2 import check_gpu
+elif BACKEND == "trellis1":
+    from gpu_preflight import check_gpu
+else:
+    raise ValueError(f"Unsupported TRELLIS_BACKEND: {BACKEND}")
+GENERATOR = "generate_trellis2_and_backup.py" if BACKEND == "trellis2" else "generate_trellis_and_backup.py"
+MODEL = "microsoft/TRELLIS.2-4B" if BACKEND == "trellis2" else "microsoft/TRELLIS-image-large"
 
 jobs = {}
 busy = threading.Lock()
@@ -65,6 +73,9 @@ class API(BaseHTTPRequestHandler):
             ready = gpu_status["ready"] and backup_configured and storage_verified
             return self.reply(200 if ready else 503, {
                 "status": "ready" if ready else "not_ready",
+                "backend": BACKEND,
+                "model": MODEL,
+                "model_loaded": False,  # Each job loads its model in a separate process.
                 "gpu": gpu_status,
                 "backup_ready": ready,
                 "backup_configured": backup_configured,
@@ -119,7 +130,7 @@ def run(job_id, image):
     try:
         output = root / (job_id + ".glb")
         result = subprocess.run(
-            [sys.executable, "/opt/trellis-runpod/scripts/generate_trellis_and_backup.py",
+            [sys.executable, str(Path(__file__).with_name(GENERATOR)),
              "--image", str(image), "--output", str(output)],
             capture_output=True, text=True, timeout=3600,
         )

@@ -2,6 +2,7 @@ name: Build TRELLIS Docker image
 on:
   workflow_dispatch:
   push:
+    branches: [main, fix/trellis-safe-build-preflight-20261009]
     paths:
       - Dockerfile
       - .dockerignore

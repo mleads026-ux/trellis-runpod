@@ -1,0 +1,8 @@
+# Separate ABI from the original CUDA 11.8 image.
+numpy==1.26.4
+torch==2.6.0
+torchvision==0.21.0
+xformers==0.0.29.post3
+transformers==4.57.1
+opencv-python-headless==4.10.0.84
+Pillow==10.4.0
